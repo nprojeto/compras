@@ -238,7 +238,12 @@ const IDIOMAS = {
     tabelaKits:"Tabela de kits", kit:"Kit", valor:"Valor",
     itens:"Itens", descricao:"Descricao", qtd:"Qtd", unidade:"Unidade",
     valorUnitario:"Valor unitario", valorTotal:"Valor total", adicionarItem:"Adicionar item",
-    destino:"Para quais INEPs vai este material", dividirIgual:"Dividir igualmente",
+    destino:"Para quais INEPs vai este material",
+    divisaoAuto:"O valor do pedido e dividido em partes iguais entre os INEPs escolhidos.",
+    faltando:"Complete antes de enviar:",
+    faltaDescricao:"informe a descricao", faltaQtd:"a quantidade precisa ser maior que zero",
+    faltaValor:"o valor unitario precisa ser maior que zero", faltaInep:"escolha pelo menos um INEP",
+    parteCada:"cada INEP recebe",
     fornecedor:"Fornecedor", observacao:"Observacao",
     enviarFinanceiro:"Enviar ao financeiro", reenviar:"Reenviar ao financeiro",
     pagar:"Aprovar e pagar", espera:"Deixar em espera", recusar:"Recusar",
@@ -285,7 +290,12 @@ const IDIOMAS = {
     tabelaKits:"Kit table", kit:"Kit", valor:"Value",
     itens:"Items", descricao:"Description", qtd:"Qty", unidade:"Unit",
     valorUnitario:"Unit price", valorTotal:"Total", adicionarItem:"Add item",
-    destino:"Which INEPs receive this material", dividirIgual:"Split evenly",
+    destino:"Which INEPs receive this material",
+    divisaoAuto:"The order value is split evenly across the selected INEPs.",
+    faltando:"Finish these before sending:",
+    faltaDescricao:"add a description", faltaQtd:"quantity must be greater than zero",
+    faltaValor:"unit price must be greater than zero", faltaInep:"pick at least one INEP",
+    parteCada:"each INEP gets",
     fornecedor:"Supplier", observacao:"Notes",
     enviarFinanceiro:"Send to finance", reenviar:"Resend to finance",
     pagar:"Approve and pay", espera:"Put on hold", recusar:"Reject",
@@ -915,10 +925,8 @@ async function telaPedidoForm(alvo){
       </div>
 
       <div class="cartao cartao-pad">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:10px;flex-wrap:wrap">
-          <h3>${t("ineps")}</h3>
-          <button class="btn neutro pequeno" id="btDividir">${t("dividirIgual")}</button>
-        </div>
+        <h3 style="margin-bottom:4px">${t("ineps")}</h3>
+        <p style="color:var(--texto-2);font-size:12.5px;margin:0 0 12px">${t("divisaoAuto")}</p>
         ${escolas.length===0 ? `<div class="vazio"><h3>${t("semEscolasDisponiveis")}</h3></div>` : `
         <input id="fBuscaEscola" placeholder="${t("buscar")}" style="margin-bottom:10px">
         <div class="lista-rolagem" id="listaEscolas"></div>`}
@@ -967,7 +975,8 @@ async function telaPedidoForm(alvo){
         const c = campo.dataset.campo;
         if (c === "descricao" || c === "unidade"){
           rasc.itens[i][c] = campo.value;
-          return;                                   // texto nao redesenha nada
+          atualizarAviso();                         // so revalida, nao redesenha
+          return;
         }
         rasc.itens[i][c] = (c === "valorUnitario")
           ? formatarMoeda(campo)
@@ -1008,8 +1017,8 @@ async function telaPedidoForm(alvo){
             <small class="mono">${esc(e.inep)} · ${esc(e.cidade)}${e.uf?"/"+esc(e.uf):""}</small>
             ${barraCapacidade(e)}
           </div>
-          ${sel?`<div style="width:132px;flex:none">
-            <input class="num" inputmode="numeric" value="${dinheiro(sel.valor||0)}" data-valor="${e.id}"></div>`:""}`;
+          ${sel?`<div style="width:120px;flex:none;text-align:right">
+            <b class="mono" data-valor="${e.id}">${dinheiro(sel.valor||0)}</b></div>`:""}`;
         cont.appendChild(div);
       });
 
@@ -1020,18 +1029,14 @@ async function telaPedidoForm(alvo){
       dividirIgual(); montarEscolas(); atualizarAviso();
     });
 
-    cont.querySelectorAll("[data-valor]").forEach(inp=> inp.addEventListener("input", ()=>{
-      const r = rasc.rateios.find(x=>x.escolaId===inp.dataset.valor);
-      if (r) r.valor = formatarMoeda(inp);
-      atualizarAviso();
-    }));
+
   }
 
-  // Atualiza so os valores dos campos de rateio, sem remontar (nao rouba o foco).
+  // Atualiza so os valores exibidos no rateio, sem remontar a lista.
   function sincronizarRateios(){
-    document.querySelectorAll("[data-valor]").forEach(inp=>{
-      const r = rasc.rateios.find(x=>x.escolaId===inp.dataset.valor);
-      if (r && document.activeElement !== inp) inp.value = dinheiro(r.valor);
+    document.querySelectorAll("[data-valor]").forEach(campo=>{
+      const r = rasc.rateios.find(x=>x.escolaId===campo.dataset.valor);
+      if (r) campo.textContent = dinheiro(r.valor);
     });
   }
 
@@ -1040,18 +1045,35 @@ async function telaPedidoForm(alvo){
     if (campo) campo.textContent = dinheiro(totalPedido());
   }
 
+  // Lista o que ainda impede o envio. Vazia = pode enviar.
+  function pendencias(){
+    const faltas = [];
+    rasc.itens.forEach((item, i)=>{
+      const rotulo = `${t("itens")} ${i+1}`;
+      if (!String(item.descricao||"").trim()) faltas.push(`${rotulo}: ${t("faltaDescricao")}`);
+      if ((Number(item.quantidade)||0) <= 0) faltas.push(`${rotulo}: ${t("faltaQtd")}`);
+      if ((Number(item.valorUnitario)||0) <= 0) faltas.push(`${rotulo}: ${t("faltaValor")}`);
+    });
+    if (rasc.rateios.length === 0) faltas.push(t("faltaInep"));
+    return faltas;
+  }
+
   function atualizarAviso(){
     const alvoAviso = id("avisoRateio");
     if (!alvoAviso) return;
-    const total = totalPedido();
-    const soma = Math.round(rasc.rateios.reduce((s,r)=> s+(Number(r.valor)||0), 0)*100)/100;
     const partes = [];
-    if (rasc.rateios.length === 0){
-      partes.push(`<div class="aviso info">${t("destino")}.</div>`);
-    } else if (Math.abs(soma-total) > 0.01){
-      partes.push(`<div class="aviso alerta">${idioma==="pt-BR"?"A divisao soma":"The split adds up to"}
-        <b class="mono">${dinheiro(soma)}</b> ${idioma==="pt-BR"?"e o pedido vale":"but the order is"}
-        <b class="mono">${dinheiro(total)}</b>.</div>`);
+    const faltas = pendencias();
+
+    const botao = id("btEnviar");
+    if (botao) botao.disabled = faltas.length > 0;
+
+    if (faltas.length > 0){
+      partes.push(`<div class="aviso alerta"><h4>${t("faltando")}</h4>
+        <ul>${faltas.map(f=>`<li>${esc(f)}</li>`).join("")}</ul></div>`);
+    } else if (rasc.rateios.length > 0){
+      partes.push(`<div class="aviso info">${t("parteCada")}
+        <b class="mono">${dinheiro(rasc.rateios[0].valor)}</b>
+        (${rasc.rateios.length} ${t("ineps")}).</div>`);
     }
     const estouros = rasc.rateios.map(r=>{
       const e = escolas.find(x=>x.id===r.escolaId);
@@ -1102,9 +1124,13 @@ async function telaPedidoForm(alvo){
   id("pFornecedor").addEventListener("input", ()=> rasc.fornecedor = id("pFornecedor").value);
   id("pObs").addEventListener("input", ()=> rasc.observacao = id("pObs").value);
   id("btVoltar").onclick = ()=>{ estado.rascunho = null; irPara("pedidos"); };
-  id("btEnviar").onclick = ()=> enviar(false);
+  id("btEnviar").onclick = ()=>{
+    const faltas = pendencias();
+    if (faltas.length > 0){ torrada(faltas[0], "erro"); atualizarAviso(); return; }
+    enviar(false);
+  };
   if (id("fBuscaEscola")) id("fBuscaEscola").addEventListener("input", montarEscolas);
-  if (id("btDividir")) id("btDividir").onclick = ()=>{ dividirIgual(); montarEscolas(); atualizarAviso(); };
+
 
   montarItens();
   montarEscolas();
