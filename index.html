@@ -223,7 +223,12 @@ const IDIOMAS = {
     loginTexto:"Cadastro de escolas, limite de gasto por codigo INEP e aprovacao de pedidos de compra em um lugar so.",
     entrando:"Entrando...",
     painel:"Painel", escolas:"Escolas", pedidos:"Pedidos", novoPedido:"Novo pedido",
-    usuarios:"Usuarios", trocarSenha:"Trocar senha",
+    usuarios:"Usuarios", trocarSenha:"Trocar senha", parceiros:"Parceiros",
+    novoParceiro:"Cadastrar parceiro", semParceiro:"— sem parceiro —",
+    documento:"CNPJ / CPF", contato:"Contato", email:"E-mail", telefone:"Telefone",
+    escolasDoParceiro:"Escolas", semParceiros:"Nenhum parceiro cadastrado ainda.",
+    cadastreParceiro:"Cadastre um parceiro antes para poder atribuir aqui.",
+    statusBloqueado:"So escolas em andamento entram em pedido de compra.",
     perfilAdmin:"Administrador", perfilFinanceiro:"Financeiro", perfilComprador:"Comprador",
     salvar:"Salvar", cancelar:"Cancelar", editar:"Editar", excluir:"Excluir", voltar:"Voltar",
     buscar:"Buscar", nenhumResultado:"Nada encontrado",
@@ -275,7 +280,12 @@ const IDIOMAS = {
     loginTexto:"Schools, spending limits per INEP code and purchase order approval in one place.",
     entrando:"Signing in...",
     painel:"Dashboard", escolas:"Schools", pedidos:"Orders", novoPedido:"New order",
-    usuarios:"Users", trocarSenha:"Change password",
+    usuarios:"Users", trocarSenha:"Change password", parceiros:"Partners",
+    novoParceiro:"Add partner", semParceiro:"— no partner —",
+    documento:"Tax ID", contato:"Contact", email:"Email", telefone:"Phone",
+    escolasDoParceiro:"Schools", semParceiros:"No partners registered yet.",
+    cadastreParceiro:"Register a partner first to assign one here.",
+    statusBloqueado:"Only schools in progress can enter a purchase order.",
     perfilAdmin:"Administrator", perfilFinanceiro:"Finance", perfilComprador:"Buyer",
     salvar:"Save", cancelar:"Cancel", editar:"Edit", excluir:"Delete", voltar:"Back",
     buscar:"Search", nenhumResultado:"Nothing found",
@@ -402,7 +412,10 @@ function menuDoPerfil(){
   itens.push({ chave:"escolas", texto:t("escolas") });
   if (p === "comprador") itens.push({ chave:"pedidoNovo", texto:t("novoPedido") });
   itens.push({ chave:"pedidos", texto:t("pedidos") });
-  if (p === "admin") itens.push({ chave:"usuarios", texto:t("usuarios") });
+  if (p === "admin"){
+    itens.push({ chave:"parceiros", texto:t("parceiros") });
+    itens.push({ chave:"usuarios", texto:t("usuarios") });
+  }
   return itens;
 }
 
@@ -418,6 +431,7 @@ const TELAS = {
   painel: telaPainel,
   escolas: telaEscolas,
   escolaForm: telaEscolaForm,
+  parceiros: telaParceiros,
   usuarios: telaUsuarios,
   pedidos: telaPedidos,
   pedidoNovo: telaPedidoForm,
@@ -572,6 +586,12 @@ function barraCapacidade(e){
    </div>`;
 }
 
+const STATUS_ESCOLA = ["Em andamento","Suspenso","Cancelado","Finalizado"];
+function seloEscola(status){
+  const cor = { "Em andamento":"azul", "Suspenso":"ambar", "Cancelado":"vermelho", "Finalizado":"verde" }[status] || "cinza";
+  return `<span class="selo ${cor}">${esc(status)}</span>`;
+}
+
 function seloStatus(status){
   const cor = { ENVIADO:"azul", EM_ESPERA:"ambar", RECUSADO:"vermelho", PAGO:"verde" }[status] || "cinza";
   return `<span class="selo ${cor}">${t("st"+status)}</span>`;
@@ -620,7 +640,7 @@ async function telaEscolas(alvo){
       <tr>
         <td class="mono">${esc(e.inep)}</td>
         <td><b>${esc(e.escola)}</b><br><small style="color:var(--texto-2)">${esc(e.cidade)}${e.uf?" / "+esc(e.uf):""} · ${esc(e.projeto||"—")}</small></td>
-        <td><span class="selo cinza">${esc(e.status)}</span><br><small style="color:var(--texto-2)">${esc(e.prioridade)}</small></td>
+        <td>${seloEscola(e.status)}<br><small style="color:var(--texto-2)">${esc(e.prioridade)}</small></td>
         <td class="num mono">${numero(e.qtdApsInst)} / ${numero(e.qtdApsPrev)}</td>
         <td>${e.miscelaneosPor==="nos" ? `<span class="selo azul">${t("miscelaneosNos")}</span>` : `<span class="selo cinza">${t("miscelaneosParceiro")}</span>`}
             <br><small style="color:var(--texto-2)">${esc(e.nomeParceiro||"—")}</small></td>
@@ -690,9 +710,14 @@ function modalKits(kits){
 /* ===================================================================
    11. TELA — CADASTRO DE ESCOLA (admin)
    =================================================================== */
-function telaEscolaForm(alvo){
+async function telaEscolaForm(alvo){
+  carregando(alvo);
   const e = estado.dados.escola || {};
   const editando = !!e.id;
+
+  let parceiros = [];
+  try{ parceiros = (await api("parceiros.listar", {})).parceiros.filter(x=>x.ativo || x.id===e.parceiroId); }
+  catch(err){ torrada(err.message, "erro"); }
   alvo.innerHTML = `
     <div class="cabeca"><div><h1>${editando ? t("editarEscola") : t("novaEscola")}</h1></div>
       <button class="btn neutro" id="btVoltar">${t("voltar")}</button></div>
@@ -704,12 +729,18 @@ function telaEscolaForm(alvo){
         <div class="campo"><label for="cUf">${t("uf")}</label><input id="cUf" maxlength="2" value="${esc(e.uf||"")}"></div>
         <div class="campo"><label for="cProjeto">${t("projeto")}</label><input id="cProjeto" value="${esc(e.projeto||"")}"></div>
         <div class="campo"><label for="cStatus">${t("status")}</label>
-          <select id="cStatus">${["Planejamento","Em execucao","Instalado","Pausado","Concluido","Cancelado"]
-            .map(s=>`<option ${e.status===s?"selected":""}>${s}</option>`).join("")}</select></div>
+          <select id="cStatus">${STATUS_ESCOLA
+            .map(x=>`<option ${(e.status||"Em andamento")===x?"selected":""}>${x}</option>`).join("")}</select>
+          <small style="color:var(--texto-3)">${t("statusBloqueado")}</small></div>
         <div class="campo"><label for="cPrioridade">${t("prioridade")}</label>
           <select id="cPrioridade">${["Alta","Media","Baixa"]
             .map(s=>`<option ${e.prioridade===s?"selected":""}>${s}</option>`).join("")}</select></div>
-        <div class="campo"><label for="cParceiro">${t("parceiro")}</label><input id="cParceiro" value="${esc(e.nomeParceiro||"")}"></div>
+        <div class="campo"><label for="cParceiro">${t("parceiro")}</label>
+          <select id="cParceiro">
+            <option value="">${t("semParceiro")}</option>
+            ${parceiros.map(x=>`<option value="${x.id}" ${e.parceiroId===x.id?"selected":""}>${esc(x.nome)}${x.ativo?"":" (inativo)"}</option>`).join("")}
+          </select>
+          ${parceiros.length===0?`<small style="color:var(--alerta)">${t("cadastreParceiro")}</small>`:""}</div>
         <div class="campo"><label for="cApsPrev">${t("apsPrev")}</label><input id="cApsPrev" type="number" min="0" value="${e.qtdApsPrev??0}"></div>
         <div class="campo"><label for="cApsInst">${t("apsInst")}</label><input id="cApsInst" type="number" min="0" value="${e.qtdApsInst??0}"></div>
         <div class="campo"><label for="cRacks">${t("racks")}</label><input id="cRacks" type="number" min="0" value="${e.qtdRacks??1}"></div>
@@ -752,13 +783,79 @@ function telaEscolaForm(alvo){
       await api("escolas.salvar", {
         id: e.id || "", inep: val("cInep"), escola: val("cEscola"), cidade: val("cCidade"),
         uf: val("cUf"), projeto: val("cProjeto"), status: val("cStatus"), prioridade: val("cPrioridade"),
-        qtdApsPrev: numVal("cApsPrev"), qtdApsInst: numVal("cApsInst"), nomeParceiro: val("cParceiro"),
+        qtdApsPrev: numVal("cApsPrev"), qtdApsInst: numVal("cApsInst"), parceiroId: val("cParceiro"),
         valorPorAp: moedaVal("cValorAp"), valorPorRack: moedaVal("cValorRack"), qtdRacks: numVal("cRacks"),
         miscelaneosPor: val("cMisc"), percentualLimite: numVal("cPercentual"), ativo: val("cAtivo")==="1",
       });
       torrada(t("salvo"),"ok"); irPara("escolas");
     }catch(err){ torrada(err.message,"erro"); }
   };
+}
+
+/* ===================================================================
+   11b. TELA — PARCEIROS (admin)
+   =================================================================== */
+async function telaParceiros(alvo){
+  carregando(alvo);
+  try{
+    const r = await api("parceiros.listar", {});
+    alvo.innerHTML = `
+      <div class="cabeca">
+        <div><h1>${t("parceiros")}</h1><p>${r.parceiros.length} ${idioma==="pt-BR"?"cadastrados":"registered"}</p></div>
+        <button class="btn" id="btNovo">${t("novoParceiro")}</button>
+      </div>
+      ${r.parceiros.length===0?`<div class="cartao vazio"><h3>${t("semParceiros")}</h3></div>`:`
+      <div class="cartao tabela-rolagem"><table>
+        <thead><tr>
+          <th>${t("nome")}</th><th>${t("documento")}</th><th>${t("contato")}</th>
+          <th class="num">${t("escolasDoParceiro")}</th><th>${t("status")}</th><th></th>
+        </tr></thead>
+        <tbody>${r.parceiros.map(x=>`<tr>
+          <td><b>${esc(x.nome)}</b></td>
+          <td class="mono">${esc(x.documento||"—")}</td>
+          <td>${esc(x.contato||"—")}<br><small style="color:var(--texto-2)">${esc(x.email||"")} ${esc(x.telefone||"")}</small></td>
+          <td class="num mono">${numero(x.escolas)}</td>
+          <td>${x.ativo?`<span class="selo verde">${t("ativo")}</span>`:`<span class="selo cinza">${t("inativo")}</span>`}</td>
+          <td><div class="barra-acoes">
+            <button class="btn neutro pequeno" data-editar="${x.id}">${t("editar")}</button>
+            <button class="btn neutro pequeno" data-excluir="${x.id}">${t("excluir")}</button>
+          </div></td></tr>`).join("")}</tbody>
+      </table></div>`}`;
+
+    id("btNovo").onclick = ()=>modalParceiro(null);
+    alvo.querySelectorAll("[data-editar]").forEach(bt=> bt.onclick = ()=>modalParceiro(r.parceiros.find(x=>x.id===bt.dataset.editar)));
+    alvo.querySelectorAll("[data-excluir]").forEach(bt=> bt.onclick = async ()=>{
+      if(!confirm(t("excluirConfirma"))) return;
+      try{ await api("parceiros.remover", { id:bt.dataset.excluir }); torrada(t("salvo"),"ok"); desenhar(); }
+      catch(err){ torrada(err.message,"erro"); }
+    });
+  }catch(e){ alvo.innerHTML = `<div class="aviso perigo">${esc(e.message)}</div>`; }
+}
+
+function modalParceiro(x){
+  const novo = !x;
+  abrirModal(novo ? t("novoParceiro") : t("editar"), `
+    <div class="campo"><label for="paNome">${t("nome")} *</label><input id="paNome" value="${esc(x?x.nome:"")}"></div>
+    <div class="grade g2">
+      <div class="campo"><label for="paDoc">${t("documento")}</label><input id="paDoc" class="num" value="${esc(x?x.documento:"")}"></div>
+      <div class="campo"><label for="paContato">${t("contato")}</label><input id="paContato" value="${esc(x?x.contato:"")}"></div>
+      <div class="campo"><label for="paEmail">${t("email")}</label><input id="paEmail" type="email" value="${esc(x?x.email:"")}"></div>
+      <div class="campo"><label for="paTel">${t("telefone")}</label><input id="paTel" class="num" value="${esc(x?x.telefone:"")}"></div>
+    </div>
+    <div class="campo"><label for="paObs">${t("observacao")}</label><textarea id="paObs">${esc(x?x.observacao:"")}</textarea></div>
+    ${novo?"":`<div class="campo"><label for="paAtivo">${t("status")}</label>
+      <select id="paAtivo"><option value="1" ${x.ativo?"selected":""}>${t("ativo")}</option>
+      <option value="0" ${!x.ativo?"selected":""}>${t("inativo")}</option></select></div>`}
+  `, [{ texto:t("salvar"), classe:"btn", acao: async ()=>{
+      try{
+        await api("parceiros.salvar", {
+          id: x?x.id:"", nome: val("paNome"), documento: val("paDoc"), contato: val("paContato"),
+          email: val("paEmail"), telefone: val("paTel"), observacao: val("paObs"),
+          ativo: novo ? true : val("paAtivo")==="1",
+        });
+        fecharModal(); torrada(t("salvo"),"ok"); desenhar();
+      }catch(e){ torrada(e.message,"erro"); }
+    }}]);
 }
 
 /* ===================================================================
