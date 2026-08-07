@@ -180,8 +180,15 @@ td.num,th.num{text-align:right}
 .torrada{background:var(--tinta);color:#fff;padding:11px 15px;border-radius:9px;font-size:13.5px;max-width:380px;box-shadow:0 10px 30px rgba(16,28,46,.3)}
 .torrada.erro{background:var(--perigo)} .torrada.ok{background:var(--ok)}
 
-.linha-itens{display:grid;grid-template-columns:1fr 90px 92px 120px 120px 36px;gap:8px;align-items:end;margin-bottom:9px}
-@media(max-width:900px){.linha-itens{grid-template-columns:1fr 1fr;}}
+.pedido-grade{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:14px;align-items:start}
+@media(max-width:1080px){.pedido-grade{grid-template-columns:1fr}}
+.item{border:1px solid var(--linha);border-radius:10px;padding:12px;margin-bottom:10px;background:var(--branco)}
+.item-cabeca{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:7px}
+.item-cabeca .indice{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--texto-3)}
+.item textarea.descricao{min-height:56px;line-height:1.45}
+.item-numeros{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:9px}
+.item-numeros label{font-size:11px;margin-bottom:3px}
+@media(max-width:600px){.item-numeros{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .escolha{display:flex;align-items:center;gap:9px;padding:9px 11px;border:1px solid var(--linha);border-radius:8px;margin-bottom:7px;background:var(--branco)}
 .escolha input[type=checkbox]{width:16px;height:16px;margin:0;flex:none}
 .escolha .info{flex:1;min-width:0}
@@ -843,6 +850,7 @@ async function telaPedidoForm(alvo){
   carregando(alvo);
   if (!estado.rascunho) estado.rascunho = estado.dados.rascunho || rascunhoNovo();
   const rasc = estado.rascunho;
+
   let escolas = [];
   try{
     const r = await api("escolas.listar", { apenasDisponiveis: true });
@@ -852,141 +860,176 @@ async function telaPedidoForm(alvo){
   const UNIDADES = ["UN","PC","CX","M","M2","M3","KG","L","RL","CJ","PAR","SC"];
   const editando = !!rasc.id;
 
-  function totalPedido(){
-    return rasc.itens.reduce((s,i)=> s + (Number(i.quantidade)||0)*(Number(i.valorUnitario)||0), 0);
-  }
+  const totalItem = (i)=> Math.round(((Number(i.quantidade)||0)*(Number(i.valorUnitario)||0))*100)/100;
+  const totalPedido = ()=> Math.round(rasc.itens.reduce((s,i)=> s+totalItem(i), 0)*100)/100;
+
   function dividirIgual(){
-    const sel = rasc.rateios;
-    if (sel.length===0) return;
+    if (rasc.rateios.length===0) return;
     const total = totalPedido();
-    const parte = Math.floor(total*100/sel.length)/100;
-    sel.forEach((r,i)=> r.valor = i===sel.length-1 ? Math.round((total-parte*(sel.length-1))*100)/100 : parte);
+    const parte = Math.floor(total*100/rasc.rateios.length)/100;
+    rasc.rateios.forEach((r,i)=>{
+      r.valor = (i===rasc.rateios.length-1)
+        ? Math.round((total - parte*(rasc.rateios.length-1))*100)/100
+        : parte;
+    });
   }
 
-  function pintar(){
-    const total = totalPedido();
-    alvo.innerHTML = `
-      <div class="cabeca">
-        <div><h1>${editando ? `${t("numero")} #${estado.dados.numero||""}` : t("novoPedido")}</h1>
-          <p>${t("destino")}</p></div>
-        <button class="btn neutro" id="btVoltar">${t("voltar")}</button>
+  // ---------------------------------------------------------------- esqueleto
+  alvo.innerHTML = `
+    <div class="cabeca">
+      <div><h1>${editando ? `${t("numero")} #${estado.dados.numero||""}` : t("novoPedido")}</h1>
+        <p>${t("destino")}</p></div>
+      <button class="btn neutro" id="btVoltar">${t("voltar")}</button>
+    </div>
+    ${editando && estado.dados.observacaoFinanceiro ? `<div class="aviso alerta" style="margin-bottom:16px">
+      <h4>${t("decisao")}</h4>${esc(estado.dados.observacaoFinanceiro)}</div>`:""}
+
+    <div class="pedido-grade">
+      <div class="cartao cartao-pad">
+        <h3 style="margin-bottom:12px">${t("itens")}</h3>
+        <div id="listaItens"></div>
+        <button class="btn neutro pequeno" id="btAddItem">+ ${t("adicionarItem")}</button>
+        <hr style="border:0;border-top:1px solid var(--linha);margin:16px 0">
+        <div class="campo"><label for="pFornecedor">${t("fornecedor")}</label>
+          <input id="pFornecedor" value="${esc(rasc.fornecedor)}"></div>
+        <div class="campo"><label for="pObs">${t("observacao")}</label>
+          <textarea id="pObs">${esc(rasc.observacao)}</textarea></div>
+        <div class="indicador" style="border-color:var(--sinal)">
+          <div class="rotulo">${t("valorTotal")}</div>
+          <div class="valor" id="totalPedido">${dinheiro(0)}</div></div>
       </div>
-      ${editando && estado.dados.observacaoFinanceiro ? `<div class="aviso alerta" style="margin-bottom:16px">
-        <h4>${t("decisao")}</h4>${esc(estado.dados.observacaoFinanceiro)}</div>`:""}
 
-      <div class="grade g2" style="align-items:start">
-        <div class="cartao cartao-pad">
-          <h3 style="margin-bottom:12px">${t("itens")}</h3>
-          <div class="linha-itens" style="font-size:11px;color:var(--texto-3);text-transform:uppercase;letter-spacing:.1em;font-family:'IBM Plex Mono',monospace">
-            <div>${t("descricao")}</div><div>${t("qtd")}</div><div>${t("unidade")}</div>
-            <div>${t("valorUnitario")}</div><div>${t("valorTotal")}</div><div></div>
-          </div>
-          <div id="listaItens"></div>
-          <button class="btn neutro pequeno" id="btAddItem">+ ${t("adicionarItem")}</button>
-          <hr style="border:0;border-top:1px solid var(--linha);margin:16px 0">
-          <div class="campo"><label for="pFornecedor">${t("fornecedor")}</label><input id="pFornecedor" value="${esc(rasc.fornecedor)}"></div>
-          <div class="campo"><label for="pObs">${t("observacao")}</label><textarea id="pObs">${esc(rasc.observacao)}</textarea></div>
-          <div class="indicador" style="border-color:var(--sinal)">
-            <div class="rotulo">${t("valorTotal")}</div><div class="valor">${dinheiro(total)}</div></div>
+      <div class="cartao cartao-pad">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:10px;flex-wrap:wrap">
+          <h3>${t("ineps")}</h3>
+          <button class="btn neutro pequeno" id="btDividir">${t("dividirIgual")}</button>
         </div>
-
-        <div class="cartao cartao-pad">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:10px;flex-wrap:wrap">
-            <h3>${t("ineps")}</h3>
-            <button class="btn neutro pequeno" id="btDividir">${t("dividirIgual")}</button>
-          </div>
-          ${escolas.length===0?`<div class="vazio"><h3>${t("semEscolasDisponiveis")}</h3></div>`:`
-          <input id="fBuscaEscola" placeholder="${t("buscar")}" style="margin-bottom:10px">
-          <div class="lista-rolagem" id="listaEscolas"></div>`}
-          <div id="avisoRateio" style="margin-top:12px"></div>
-          <div class="barra-acoes" style="margin-top:14px">
-            <button class="btn" id="btEnviar">${editando ? t("reenviar") : t("enviarFinanceiro")}</button>
-          </div>
+        ${escolas.length===0 ? `<div class="vazio"><h3>${t("semEscolasDisponiveis")}</h3></div>` : `
+        <input id="fBuscaEscola" placeholder="${t("buscar")}" style="margin-bottom:10px">
+        <div class="lista-rolagem" id="listaEscolas"></div>`}
+        <div id="avisoRateio" style="margin-top:12px"></div>
+        <div class="barra-acoes" style="margin-top:14px">
+          <button class="btn" id="btEnviar">${editando ? t("reenviar") : t("enviarFinanceiro")}</button>
         </div>
-      </div>`;
+      </div>
+    </div>`;
 
-    // ---- itens
+  // ---------------------------------------------------------------- itens
+  function montarItens(){
     const lista = id("listaItens");
     lista.innerHTML = "";
     rasc.itens.forEach((item, i)=>{
-      const linha = document.createElement("div");
-      linha.className = "linha-itens";
-      linha.innerHTML = `
-        <input value="${esc(item.descricao)}" data-campo="descricao" data-i="${i}" placeholder="${t("descricao")}">
-        <input type="number" step="0.001" min="0" class="num" value="${item.quantidade}" data-campo="quantidade" data-i="${i}">
-        <select data-campo="unidade" data-i="${i}">${UNIDADES.map(u=>`<option ${item.unidade===u?"selected":""}>${u}</option>`).join("")}</select>
-        <input type="number" step="0.01" min="0" class="num" value="${item.valorUnitario}" data-campo="valorUnitario" data-i="${i}">
-        <input class="num" value="${dinheiro((Number(item.quantidade)||0)*(Number(item.valorUnitario)||0))}" disabled>
-        <button class="btn neutro pequeno" data-remover="${i}" title="${t("excluir")}">×</button>`;
-      lista.appendChild(linha);
+      const bloco = document.createElement("div");
+      bloco.className = "item";
+      bloco.innerHTML = `
+        <div class="item-cabeca">
+          <span class="indice">${t("itens")} ${i+1}</span>
+          <button class="btn neutro pequeno" data-remover="${i}" title="${t("excluir")}">${t("excluir")}</button>
+        </div>
+        <label for="it${i}desc">${t("descricao")}</label>
+        <textarea class="descricao" id="it${i}desc" data-campo="descricao" data-i="${i}"
+          placeholder="${t("descricao")}">${esc(item.descricao)}</textarea>
+        <div class="item-numeros">
+          <div><label for="it${i}qtd">${t("qtd")}</label>
+            <input id="it${i}qtd" type="number" step="0.001" min="0" class="num"
+              value="${item.quantidade}" data-campo="quantidade" data-i="${i}"></div>
+          <div><label for="it${i}un">${t("unidade")}</label>
+            <select id="it${i}un" data-campo="unidade" data-i="${i}">
+              ${UNIDADES.map(u=>`<option ${item.unidade===u?"selected":""}>${u}</option>`).join("")}</select></div>
+          <div><label for="it${i}vu">${t("valorUnitario")}</label>
+            <input id="it${i}vu" type="number" step="0.01" min="0" class="num"
+              value="${item.valorUnitario}" data-campo="valorUnitario" data-i="${i}"></div>
+          <div><label>${t("valorTotal")}</label>
+            <input class="num" id="it${i}total" value="${dinheiro(totalItem(item))}" disabled></div>
+        </div>`;
+      lista.appendChild(bloco);
     });
+
     lista.querySelectorAll("[data-campo]").forEach(campo=>{
-      campo.addEventListener("input", ()=>{
+      const evento = campo.tagName === "SELECT" ? "change" : "input";
+      campo.addEventListener(evento, ()=>{
         const i = Number(campo.dataset.i);
         const c = campo.dataset.campo;
-        rasc.itens[i][c] = (c==="descricao"||c==="unidade") ? campo.value : Number(String(campo.value).replace(",","."))||0;
-        if (c!=="descricao" && c!=="unidade"){ dividirIgual(); pintar(); }
-        else { atualizarAviso(); }
-      });
-    });
-    lista.querySelectorAll("[data-remover]").forEach(b=> b.onclick = ()=>{
-      rasc.itens.splice(Number(b.dataset.remover),1);
-      if (rasc.itens.length===0) rasc.itens.push({descricao:"",quantidade:1,unidade:"UN",valorUnitario:0});
-      dividirIgual(); pintar();
-    });
-    id("btAddItem").onclick = ()=>{ rasc.itens.push({descricao:"",quantidade:1,unidade:"UN",valorUnitario:0}); pintar(); };
-
-    // ---- escolas
-    if (escolas.length>0){
-      const busca = (id("fBuscaEscola").value||"").toLowerCase();
-      const cont = id("listaEscolas");
-      cont.innerHTML = "";
-      escolas
-        .filter(e=> !busca || `${e.inep} ${e.escola} ${e.cidade}`.toLowerCase().includes(busca))
-        .forEach(e=>{
-          const sel = rasc.rateios.find(r=>r.escolaId===e.id);
-          const div = document.createElement("div");
-          div.className = "escolha";
-          div.innerHTML = `
-            <input type="checkbox" ${sel?"checked":""} data-sel="${e.id}" aria-label="${esc(e.escola)}">
-            <div class="info">
-              <b>${esc(e.escola)}</b>
-              <small class="mono">${esc(e.inep)} · ${esc(e.cidade)}${e.uf?"/"+esc(e.uf):""}</small>
-              ${barraCapacidade(e)}
-            </div>
-            ${sel?`<div style="width:120px;flex:none">
-              <input type="number" step="0.01" min="0" class="num" value="${sel.valor}" data-valor="${e.id}"></div>`:""}`;
-          cont.appendChild(div);
-        });
-      cont.querySelectorAll("[data-sel]").forEach(chk=> chk.onchange = ()=>{
-        const eid = chk.dataset.sel;
-        if (chk.checked) rasc.rateios.push({ escolaId:eid, valor:0 });
-        else rasc.rateios = rasc.rateios.filter(r=>r.escolaId!==eid);
-        dividirIgual(); pintar();
-      });
-      cont.querySelectorAll("[data-valor]").forEach(inp=> inp.addEventListener("input", ()=>{
-        const r = rasc.rateios.find(x=>x.escolaId===inp.dataset.valor);
-        if (r) r.valor = Number(String(inp.value).replace(",","."))||0;
+        if (c === "descricao" || c === "unidade"){
+          rasc.itens[i][c] = campo.value;
+          return;                                   // texto nao redesenha nada
+        }
+        rasc.itens[i][c] = Number(String(campo.value).replace(",", ".")) || 0;
+        const celula = id(`it${i}total`);
+        if (celula) celula.value = dinheiro(totalItem(rasc.itens[i]));
+        dividirIgual();
+        atualizarTotais();
+        sincronizarRateios();
         atualizarAviso();
-      }));
-      id("fBuscaEscola").addEventListener("input", ()=>{ const v=id("fBuscaEscola").value; pintar(); id("fBuscaEscola").value=v; id("fBuscaEscola").focus(); });
-      id("btDividir").onclick = ()=>{ dividirIgual(); pintar(); };
-    }
+      });
+    });
 
-    id("pFornecedor").addEventListener("input", ()=> rasc.fornecedor = id("pFornecedor").value);
-    id("pObs").addEventListener("input", ()=> rasc.observacao = id("pObs").value);
-    id("btVoltar").onclick = ()=>{ estado.rascunho=null; irPara("pedidos"); };
-    id("btEnviar").onclick = enviar;
-    atualizarAviso();
+    lista.querySelectorAll("[data-remover]").forEach(b=> b.onclick = ()=>{
+      rasc.itens.splice(Number(b.dataset.remover), 1);
+      if (rasc.itens.length === 0) rasc.itens.push({descricao:"",quantidade:1,unidade:"UN",valorUnitario:0});
+      dividirIgual(); montarItens(); atualizarTotais(); montarEscolas(); atualizarAviso();
+    });
+  }
+
+  // ---------------------------------------------------------------- escolas
+  function montarEscolas(){
+    const cont = id("listaEscolas");
+    if (!cont) return;
+    const campoBusca = id("fBuscaEscola");
+    const busca = (campoBusca ? campoBusca.value : "").toLowerCase();
+    cont.innerHTML = "";
+    escolas
+      .filter(e=> !busca || `${e.inep} ${e.escola} ${e.cidade}`.toLowerCase().includes(busca))
+      .forEach(e=>{
+        const sel = rasc.rateios.find(r=>r.escolaId===e.id);
+        const div = document.createElement("div");
+        div.className = "escolha";
+        div.innerHTML = `
+          <input type="checkbox" ${sel?"checked":""} data-sel="${e.id}" aria-label="${esc(e.escola)}">
+          <div class="info">
+            <b>${esc(e.escola)}</b>
+            <small class="mono">${esc(e.inep)} · ${esc(e.cidade)}${e.uf?"/"+esc(e.uf):""}</small>
+            ${barraCapacidade(e)}
+          </div>
+          ${sel?`<div style="width:120px;flex:none">
+            <input type="number" step="0.01" min="0" class="num" value="${sel.valor}" data-valor="${e.id}"></div>`:""}`;
+        cont.appendChild(div);
+      });
+
+    cont.querySelectorAll("[data-sel]").forEach(chk=> chk.onchange = ()=>{
+      const eid = chk.dataset.sel;
+      if (chk.checked) rasc.rateios.push({ escolaId:eid, valor:0 });
+      else rasc.rateios = rasc.rateios.filter(r=>r.escolaId!==eid);
+      dividirIgual(); montarEscolas(); atualizarAviso();
+    });
+
+    cont.querySelectorAll("[data-valor]").forEach(inp=> inp.addEventListener("input", ()=>{
+      const r = rasc.rateios.find(x=>x.escolaId===inp.dataset.valor);
+      if (r) r.valor = Number(String(inp.value).replace(",", ".")) || 0;
+      atualizarAviso();
+    }));
+  }
+
+  // Atualiza so os valores dos campos de rateio, sem remontar (nao rouba o foco).
+  function sincronizarRateios(){
+    document.querySelectorAll("[data-valor]").forEach(inp=>{
+      const r = rasc.rateios.find(x=>x.escolaId===inp.dataset.valor);
+      if (r && document.activeElement !== inp) inp.value = r.valor;
+    });
+  }
+
+  function atualizarTotais(){
+    const campo = id("totalPedido");
+    if (campo) campo.textContent = dinheiro(totalPedido());
   }
 
   function atualizarAviso(){
     const alvoAviso = id("avisoRateio");
     if (!alvoAviso) return;
-    const total = Math.round(totalPedido()*100)/100;
-    const soma = Math.round(rasc.rateios.reduce((s,r)=>s+(Number(r.valor)||0),0)*100)/100;
+    const total = totalPedido();
+    const soma = Math.round(rasc.rateios.reduce((s,r)=> s+(Number(r.valor)||0), 0)*100)/100;
     const partes = [];
-    if (rasc.rateios.length===0){
+    if (rasc.rateios.length === 0){
       partes.push(`<div class="aviso info">${t("destino")}.</div>`);
     } else if (Math.abs(soma-total) > 0.01){
       partes.push(`<div class="aviso alerta">${idioma==="pt-BR"?"A divisao soma":"The split adds up to"}
@@ -997,25 +1040,25 @@ async function telaPedidoForm(alvo){
       const e = escolas.find(x=>x.id===r.escolaId);
       if (!e) return null;
       const novo = (Number(e.gastoTotal)||0) + (Number(r.valor)||0);
-      if (Number(e.limite)>0 && novo > Number(e.limite)+0.01)
+      if (Number(e.limite) > 0 && novo > Number(e.limite)+0.01)
         return `${esc(e.inep)} — ${esc(e.escola)}: <b class="mono">+${dinheiro(novo-e.limite)}</b>`;
-      if (Number(e.limite)<=0) return `${esc(e.inep)} — ${esc(e.escola)}: ${t("semLimite")}`;
+      if (Number(e.limite) <= 0) return `${esc(e.inep)} — ${esc(e.escola)}: ${t("semLimite")}`;
       return null;
     }).filter(Boolean);
-    if (estouros.length>0){
+    if (estouros.length > 0){
       partes.push(`<div class="aviso perigo"><h4>${t("avisoEstouro")}</h4>
         <ul>${estouros.map(x=>`<li>${x}</li>`).join("")}</ul></div>`);
     }
     alvoAviso.innerHTML = partes.join("");
   }
 
+  // ---------------------------------------------------------------- envio
   async function enviar(confirmar){
-    const dadosPedido = {
-      id: rasc.id, fornecedor: rasc.fornecedor, observacao: rasc.observacao,
-      itens: rasc.itens, rateios: rasc.rateios, confirmarExcedente: confirmar===true,
-    };
     try{
-      const r = await api("pedidos.salvar", dadosPedido);
+      const r = await api("pedidos.salvar", {
+        id: rasc.id, fornecedor: rasc.fornecedor, observacao: rasc.observacao,
+        itens: rasc.itens, rateios: rasc.rateios, confirmarExcedente: confirmar === true,
+      });
       if (r.precisaConfirmar){
         abrirModal(t("limiteEstourado"), `
           <div class="aviso perigo"><h4>${t("avisoEstouro")}</h4>
@@ -1027,12 +1070,29 @@ async function telaPedidoForm(alvo){
         return;
       }
       estado.rascunho = null;
-      torrada(t("salvo"),"ok");
+      torrada(t("salvo"), "ok");
       irPara("pedidoDetalhe", { id: r.id });
-    }catch(e){ torrada(e.message,"erro"); }
+    }catch(e){ torrada(e.message, "erro"); }
   }
 
-  pintar();
+  // ---------------------------------------------------------------- ligacoes
+  id("btAddItem").onclick = ()=>{
+    rasc.itens.push({descricao:"",quantidade:1,unidade:"UN",valorUnitario:0});
+    montarItens(); atualizarTotais();
+    const ultimo = id(`it${rasc.itens.length-1}desc`);
+    if (ultimo) ultimo.focus();
+  };
+  id("pFornecedor").addEventListener("input", ()=> rasc.fornecedor = id("pFornecedor").value);
+  id("pObs").addEventListener("input", ()=> rasc.observacao = id("pObs").value);
+  id("btVoltar").onclick = ()=>{ estado.rascunho = null; irPara("pedidos"); };
+  id("btEnviar").onclick = ()=> enviar(false);
+  if (id("fBuscaEscola")) id("fBuscaEscola").addEventListener("input", montarEscolas);
+  if (id("btDividir")) id("btDividir").onclick = ()=>{ dividirIgual(); montarEscolas(); atualizarAviso(); };
+
+  montarItens();
+  montarEscolas();
+  atualizarTotais();
+  atualizarAviso();
 }
 
 /* ===================================================================
