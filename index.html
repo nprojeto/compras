@@ -334,6 +334,20 @@ function id(x){ return document.getElementById(x); }
 function val(x){ const e=id(x); return e ? e.value.trim() : ""; }
 function numVal(x){ const e=id(x); return e ? Number(String(e.value).replace(",", ".")) || 0 : 0; }
 
+/* Mascara de moeda: o campo e texto, o usuario digita so numeros e a
+   ultima dupla de digitos vira centavos. deMoeda() devolve o numero puro. */
+function deMoeda(texto){
+  const digitos = String(texto ?? "").replace(/\D/g, "");
+  return digitos ? Number(digitos)/100 : 0;
+}
+function formatarMoeda(campo){
+  const digitos = String(campo.value).replace(/\D/g, "");
+  const valor = digitos ? Number(digitos)/100 : 0;
+  campo.value = digitos ? dinheiro(valor) : "";
+  return valor;
+}
+function moedaVal(x){ const e = id(x); return e ? deMoeda(e.value) : 0; }
+
 function torrada(texto, tipo){
   const d=document.createElement("div");
   d.className="torrada "+(tipo||"");
@@ -689,8 +703,8 @@ function telaEscolaForm(alvo){
         <div class="campo"><label for="cApsPrev">${t("apsPrev")}</label><input id="cApsPrev" type="number" min="0" value="${e.qtdApsPrev??0}"></div>
         <div class="campo"><label for="cApsInst">${t("apsInst")}</label><input id="cApsInst" type="number" min="0" value="${e.qtdApsInst??0}"></div>
         <div class="campo"><label for="cRacks">${t("racks")}</label><input id="cRacks" type="number" min="0" value="${e.qtdRacks??1}"></div>
-        <div class="campo"><label for="cValorAp">${t("valorPorAp")}</label><input id="cValorAp" type="number" step="0.01" min="0" value="${e.valorPorAp??0}"></div>
-        <div class="campo"><label for="cValorRack">${t("valorPorRack")}</label><input id="cValorRack" type="number" step="0.01" min="0" value="${e.valorPorRack??0}"></div>
+        <div class="campo"><label for="cValorAp">${t("valorPorAp")}</label><input id="cValorAp" class="num" inputmode="numeric" value="${dinheiro(e.valorPorAp||0)}"></div>
+        <div class="campo"><label for="cValorRack">${t("valorPorRack")}</label><input id="cValorRack" class="num" inputmode="numeric" value="${dinheiro(e.valorPorRack||0)}"></div>
         <div class="campo"><label for="cPercentual">${t("percentualLimite")}</label><input id="cPercentual" type="number" step="0.01" min="0" max="100" value="${e.percentualLimite??0}"></div>
         <div class="campo"><label for="cMisc">${t("miscelaneos")}</label>
           <select id="cMisc">
@@ -712,13 +726,14 @@ function telaEscolaForm(alvo){
     const aps = numVal("cApsInst");
     const receita = aps>0 ? 1740 + 610*(aps-1) : 0;
     const limite = receita * numVal("cPercentual")/100;
-    const inst = numVal("cValorAp")*aps + numVal("cValorRack")*numVal("cRacks");
+    const inst = moedaVal("cValorAp")*aps + moedaVal("cValorRack")*numVal("cRacks");
     id("previa").innerHTML = `<b>${t("receita")}:</b> ${dinheiro(receita)} &nbsp;·&nbsp;
       <b>${t("limite")}:</b> ${dinheiro(limite)} &nbsp;·&nbsp;
       <b>${t("gastoInstalacao")}:</b> ${dinheiro(inst)} &nbsp;·&nbsp;
       <b>${idioma==="pt-BR"?"Sobra para miscelaneos":"Left for miscellaneous"}:</b> ${dinheiro(limite-inst)}`;
   };
-  ["cApsInst","cPercentual","cValorAp","cValorRack","cRacks"].forEach(c=> id(c).addEventListener("input", previa));
+  ["cValorAp","cValorRack"].forEach(c=> id(c).addEventListener("input", ()=>{ formatarMoeda(id(c)); previa(); }));
+  ["cApsInst","cPercentual","cRacks"].forEach(c=> id(c).addEventListener("input", previa));
   previa();
 
   id("btVoltar").onclick = id("btCancelar").onclick = ()=>irPara("escolas");
@@ -728,7 +743,7 @@ function telaEscolaForm(alvo){
         id: e.id || "", inep: val("cInep"), escola: val("cEscola"), cidade: val("cCidade"),
         uf: val("cUf"), projeto: val("cProjeto"), status: val("cStatus"), prioridade: val("cPrioridade"),
         qtdApsPrev: numVal("cApsPrev"), qtdApsInst: numVal("cApsInst"), nomeParceiro: val("cParceiro"),
-        valorPorAp: numVal("cValorAp"), valorPorRack: numVal("cValorRack"), qtdRacks: numVal("cRacks"),
+        valorPorAp: moedaVal("cValorAp"), valorPorRack: moedaVal("cValorRack"), qtdRacks: numVal("cRacks"),
         miscelaneosPor: val("cMisc"), percentualLimite: numVal("cPercentual"), ativo: val("cAtivo")==="1",
       });
       torrada(t("salvo"),"ok"); irPara("escolas");
@@ -937,8 +952,8 @@ async function telaPedidoForm(alvo){
             <select id="it${i}un" data-campo="unidade" data-i="${i}">
               ${UNIDADES.map(u=>`<option ${item.unidade===u?"selected":""}>${u}</option>`).join("")}</select></div>
           <div><label for="it${i}vu">${t("valorUnitario")}</label>
-            <input id="it${i}vu" type="number" step="0.01" min="0" class="num"
-              value="${item.valorUnitario}" data-campo="valorUnitario" data-i="${i}"></div>
+            <input id="it${i}vu" class="num" inputmode="numeric"
+              value="${dinheiro(item.valorUnitario||0)}" data-campo="valorUnitario" data-i="${i}"></div>
           <div><label>${t("valorTotal")}</label>
             <input class="num" id="it${i}total" value="${dinheiro(totalItem(item))}" disabled></div>
         </div>`;
@@ -954,7 +969,9 @@ async function telaPedidoForm(alvo){
           rasc.itens[i][c] = campo.value;
           return;                                   // texto nao redesenha nada
         }
-        rasc.itens[i][c] = Number(String(campo.value).replace(",", ".")) || 0;
+        rasc.itens[i][c] = (c === "valorUnitario")
+          ? formatarMoeda(campo)
+          : Number(String(campo.value).replace(",", ".")) || 0;
         const celula = id(`it${i}total`);
         if (celula) celula.value = dinheiro(totalItem(rasc.itens[i]));
         dividirIgual();
@@ -991,8 +1008,8 @@ async function telaPedidoForm(alvo){
             <small class="mono">${esc(e.inep)} · ${esc(e.cidade)}${e.uf?"/"+esc(e.uf):""}</small>
             ${barraCapacidade(e)}
           </div>
-          ${sel?`<div style="width:120px;flex:none">
-            <input type="number" step="0.01" min="0" class="num" value="${sel.valor}" data-valor="${e.id}"></div>`:""}`;
+          ${sel?`<div style="width:132px;flex:none">
+            <input class="num" inputmode="numeric" value="${dinheiro(sel.valor||0)}" data-valor="${e.id}"></div>`:""}`;
         cont.appendChild(div);
       });
 
@@ -1005,7 +1022,7 @@ async function telaPedidoForm(alvo){
 
     cont.querySelectorAll("[data-valor]").forEach(inp=> inp.addEventListener("input", ()=>{
       const r = rasc.rateios.find(x=>x.escolaId===inp.dataset.valor);
-      if (r) r.valor = Number(String(inp.value).replace(",", ".")) || 0;
+      if (r) r.valor = formatarMoeda(inp);
       atualizarAviso();
     }));
   }
@@ -1014,7 +1031,7 @@ async function telaPedidoForm(alvo){
   function sincronizarRateios(){
     document.querySelectorAll("[data-valor]").forEach(inp=>{
       const r = rasc.rateios.find(x=>x.escolaId===inp.dataset.valor);
-      if (r && document.activeElement !== inp) inp.value = r.valor;
+      if (r && document.activeElement !== inp) inp.value = dinheiro(r.valor);
     });
   }
 
