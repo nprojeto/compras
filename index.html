@@ -1279,6 +1279,10 @@ async function telaPedidoForm(alvo){
           <div class="info">
             <b>${esc(e.escola)}</b>
             <small class="mono">${esc(e.inep)} · ${esc(e.cidade)}${e.uf?"/"+esc(e.uf):""}</small>
+            ${(e.status !== "Em andamento" || e.miscelaneosPor !== "nos") ? `<div style="margin:5px 0 2px;display:flex;gap:5px;flex-wrap:wrap">
+              ${e.status !== "Em andamento" ? seloEscola(e.status) : ""}
+              ${e.miscelaneosPor !== "nos" ? `<span class="selo cinza">${t("miscelaneosParceiro")}</span>` : ""}
+            </div>` : ""}
             ${barraCapacidade(e)}
           </div>
           ${sel?`<div style="width:120px;flex:none;text-align:right">
