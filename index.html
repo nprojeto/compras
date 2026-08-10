@@ -229,6 +229,15 @@ const IDIOMAS = {
     escolasDoParceiro:"Escolas", semParceiros:"Nenhum parceiro cadastrado ainda.",
     cadastreParceiro:"Cadastre um parceiro antes para poder atribuir aqui.",
     statusBloqueado:"So escolas em andamento entram em pedido de compra.",
+    simulacao:"Simulacao de lucro", imposto:"% de imposto", socio:"% do parceiro socio",
+    selecionarTodas:"Marcar todas", limparSelecao:"Desmarcar todas",
+    totalRecebido:"Total a receber", totalImpostos:"Impostos", totalGastos:"Gastos",
+    baseSocio:"Base do socio", valorSocio:"Parceiro socio", custoTotal:"Custo total",
+    lucro:"Lucro", margem:"Margem (recebido / custo)", margemLiquida:"Margem liquida",
+    apsSimulados:"APs simulados", selecionadas:"escolas no calculo",
+    notaSimulacao:"Mexer nos APs aqui nao altera o cadastro: e so simulacao.",
+    baseSocioNota:"recebido menos gastos e impostos",
+    excedeAviso:"Passa do limite, mas o pedido pode ser enviado assim mesmo.",
     perfilAdmin:"Administrador", perfilFinanceiro:"Financeiro", perfilComprador:"Comprador",
     salvar:"Salvar", cancelar:"Cancelar", editar:"Editar", excluir:"Excluir", voltar:"Voltar",
     buscar:"Buscar", nenhumResultado:"Nada encontrado",
@@ -286,6 +295,15 @@ const IDIOMAS = {
     escolasDoParceiro:"Schools", semParceiros:"No partners registered yet.",
     cadastreParceiro:"Register a partner first to assign one here.",
     statusBloqueado:"Only schools in progress can enter a purchase order.",
+    simulacao:"Profit simulation", imposto:"% tax", socio:"% partner share",
+    selecionarTodas:"Select all", limparSelecao:"Clear selection",
+    totalRecebido:"Total revenue", totalImpostos:"Taxes", totalGastos:"Costs",
+    baseSocio:"Partner base", valorSocio:"Partner share", custoTotal:"Total cost",
+    lucro:"Profit", margem:"Margin (revenue / cost)", margemLiquida:"Net margin",
+    apsSimulados:"Simulated APs", selecionadas:"schools included",
+    notaSimulacao:"Changing APs here does not touch the record: simulation only.",
+    baseSocioNota:"revenue minus costs and taxes",
+    excedeAviso:"Over the limit, but the order can still be sent.",
     perfilAdmin:"Administrator", perfilFinanceiro:"Finance", perfilComprador:"Buyer",
     salvar:"Save", cancelar:"Cancel", editar:"Edit", excluir:"Delete", voltar:"Back",
     buscar:"Search", nenhumResultado:"Nothing found",
@@ -413,6 +431,7 @@ function menuDoPerfil(){
   if (p === "comprador") itens.push({ chave:"pedidoNovo", texto:t("novoPedido") });
   itens.push({ chave:"pedidos", texto:t("pedidos") });
   if (p === "admin"){
+    itens.push({ chave:"simulacao", texto:t("simulacao") });
     itens.push({ chave:"parceiros", texto:t("parceiros") });
     itens.push({ chave:"usuarios", texto:t("usuarios") });
   }
@@ -431,6 +450,7 @@ const TELAS = {
   painel: telaPainel,
   escolas: telaEscolas,
   escolaForm: telaEscolaForm,
+  simulacao: telaSimulacao,
   parceiros: telaParceiros,
   usuarios: telaUsuarios,
   pedidos: telaPedidos,
@@ -587,6 +607,13 @@ function barraCapacidade(e){
 }
 
 const STATUS_ESCOLA = ["Em andamento","Suspenso","Cancelado","Finalizado"];
+
+/* Mesma tabela de kits do backend: KIT 1 = 1.740 e cada AP a mais soma 610. */
+const VALOR_KIT_1 = 1740, VALOR_AP_ADICIONAL = 610;
+function receitaPorAps(aps){
+  const n = Number(aps) || 0;
+  return n <= 0 ? 0 : Math.round((VALOR_KIT_1 + VALOR_AP_ADICIONAL*(n-1))*100)/100;
+}
 function seloEscola(status){
   const cor = { "Em andamento":"azul", "Suspenso":"ambar", "Cancelado":"vermelho", "Finalizado":"verde" }[status] || "cinza";
   return `<span class="selo ${cor}">${esc(status)}</span>`;
@@ -765,7 +792,7 @@ async function telaEscolaForm(alvo){
 
   const previa = ()=>{
     const aps = numVal("cApsInst");
-    const receita = aps>0 ? 1740 + 610*(aps-1) : 0;
+    const receita = receitaPorAps(aps);
     const limite = receita * numVal("cPercentual")/100;
     const inst = moedaVal("cValorAp")*aps + moedaVal("cValorRack")*numVal("cRacks");
     id("previa").innerHTML = `<b>${t("receita")}:</b> ${dinheiro(receita)} &nbsp;·&nbsp;
@@ -777,7 +804,8 @@ async function telaEscolaForm(alvo){
   ["cApsInst","cPercentual","cRacks"].forEach(c=> id(c).addEventListener("input", previa));
   previa();
 
-  id("btVoltar").onclick = id("btCancelar").onclick = ()=>irPara("escolas");
+  const voltar = estado.dados.voltarPara || "escolas";
+  id("btVoltar").onclick = id("btCancelar").onclick = ()=>irPara(voltar);
   id("btSalvar").onclick = async ()=>{
     try{
       await api("escolas.salvar", {
@@ -787,9 +815,153 @@ async function telaEscolaForm(alvo){
         valorPorAp: moedaVal("cValorAp"), valorPorRack: moedaVal("cValorRack"), qtdRacks: numVal("cRacks"),
         miscelaneosPor: val("cMisc"), percentualLimite: numVal("cPercentual"), ativo: val("cAtivo")==="1",
       });
-      torrada(t("salvo"),"ok"); irPara("escolas");
+      torrada(t("salvo"),"ok"); irPara(voltar);
     }catch(err){ torrada(err.message,"erro"); }
   };
+}
+
+/* ===================================================================
+   11a. TELA — SIMULACAO DE LUCRO (admin)
+   Imposto incide sobre o total a receber.
+   O parceiro socio recebe sobre (recebido - gastos - impostos).
+   =================================================================== */
+async function telaSimulacao(alvo){
+  carregando(alvo);
+  let escolas = [];
+  try{
+    escolas = (await api("escolas.listar", {})).escolas.filter(e=>e.ativo);
+  }catch(e){ alvo.innerHTML = `<div class="aviso perigo">${esc(e.message)}</div>`; return; }
+
+  if (!estado.simulacao) estado.simulacao = { imposto:0, socio:0, selecionadas:null, aps:{} };
+  const sim = estado.simulacao;
+  const todos = escolas.map(e=>e.id);
+  sim.selecionadas = sim.selecionadas === null ? todos.slice() : sim.selecionadas.filter(x=>todos.includes(x));
+
+  const apsDe = (e)=> sim.aps[e.id] !== undefined ? sim.aps[e.id] : (Number(e.qtdApsInst)||0);
+
+  function contas(){
+    let receita = 0, gastos = 0;
+    const linhas = escolas.map(e=>{
+      const aps = apsDe(e);
+      const r = receitaPorAps(aps);
+      const inst = (Number(e.valorPorAp)||0)*aps + (Number(e.valorPorRack)||0)*(Number(e.qtdRacks)||0);
+      const g = inst + (Number(e.gastoPedidos)||0);
+      const dentro = sim.selecionadas.includes(e.id);
+      if (dentro){ receita += r; gastos += g; }
+      return { e, aps, receita:r, gastos:g, dentro };
+    });
+    const imposto = receita * (Number(sim.imposto)||0) / 100;
+    const baseSocio = receita - gastos - imposto;
+    const socio = Math.max(0, baseSocio) * (Number(sim.socio)||0) / 100;
+    const custoTotal = gastos + imposto + socio;
+    const lucro = receita - custoTotal;
+    return { linhas, receita, gastos, imposto, baseSocio, socio, custoTotal, lucro,
+      margem: custoTotal > 0 ? receita/custoTotal : 0,
+      margemLiquida: receita > 0 ? lucro/receita*100 : 0 };
+  }
+
+  alvo.innerHTML = `
+    <div class="cabeca">
+      <div><h1>${t("simulacao")}</h1><p>${t("notaSimulacao")}</p></div>
+    </div>
+
+    <div class="cartao cartao-pad" style="margin-bottom:16px">
+      <div class="grade g4">
+        <div class="campo" style="margin:0"><label for="sImposto">${t("imposto")}</label>
+          <input id="sImposto" type="number" step="0.01" min="0" max="100" class="num" value="${sim.imposto}"></div>
+        <div class="campo" style="margin:0"><label for="sSocio">${t("socio")}</label>
+          <input id="sSocio" type="number" step="0.01" min="0" max="100" class="num" value="${sim.socio}"></div>
+        <div class="campo" style="margin:0"><label>&nbsp;</label>
+          <div class="barra-acoes">
+            <button class="btn neutro pequeno" id="btTodas">${t("selecionarTodas")}</button>
+            <button class="btn neutro pequeno" id="btNenhuma">${t("limparSelecao")}</button>
+          </div></div>
+        <div class="campo" style="margin:0"><label>&nbsp;</label>
+          <div class="mono" id="simContagem" style="padding-top:9px;color:var(--texto-2)"></div></div>
+      </div>
+    </div>
+
+    <div class="grade g4" id="simTotais" style="margin-bottom:16px"></div>
+
+    <div class="cartao tabela-rolagem">
+      <table>
+        <thead><tr>
+          <th style="width:34px"></th><th>${t("inep")}</th><th>${t("escola")}</th>
+          <th class="num">${t("apsSimulados")}</th><th class="num">${t("receita")}</th>
+          <th class="num">${t("totalGastos")}</th><th class="num">${t("lucro")}</th><th></th>
+        </tr></thead>
+        <tbody id="simCorpo"></tbody>
+      </table>
+    </div>`;
+
+  function pintarTotais(){
+    const c = contas();
+    id("simContagem").textContent = `${sim.selecionadas.length} / ${escolas.length} ${t("selecionadas")}`;
+    id("simTotais").innerHTML = `
+      <div class="indicador"><div class="rotulo">${t("totalRecebido")}</div>
+        <div class="valor">${dinheiro(c.receita)}</div></div>
+      <div class="indicador"><div class="rotulo">${t("totalImpostos")}</div>
+        <div class="valor">${dinheiro(c.imposto)}</div><div class="nota">${numero(sim.imposto,2)}% ${idioma==="pt-BR"?"do recebido":"of revenue"}</div></div>
+      <div class="indicador"><div class="rotulo">${t("totalGastos")}</div>
+        <div class="valor">${dinheiro(c.gastos)}</div></div>
+      <div class="indicador"><div class="rotulo">${t("valorSocio")}</div>
+        <div class="valor">${dinheiro(c.socio)}</div>
+        <div class="nota">${numero(sim.socio,2)}% ${idioma==="pt-BR"?"sobre":"of"} ${dinheiro(c.baseSocio)}</div></div>
+      <div class="indicador"><div class="rotulo">${t("baseSocio")}</div>
+        <div class="valor">${dinheiro(c.baseSocio)}</div><div class="nota">${t("baseSocioNota")}</div></div>
+      <div class="indicador"><div class="rotulo">${t("custoTotal")}</div>
+        <div class="valor">${dinheiro(c.custoTotal)}</div></div>
+      <div class="indicador ${c.lucro<0?"perigo":"ok"}"><div class="rotulo">${t("lucro")}</div>
+        <div class="valor">${dinheiro(c.lucro)}</div>
+        <div class="nota">${t("margemLiquida")}: ${numero(c.margemLiquida,1)}%</div></div>
+      <div class="indicador ${c.margem<1?"perigo":"ok"}"><div class="rotulo">${t("margem")}</div>
+        <div class="valor">${c.custoTotal>0 ? numero(c.margem,2)+"x" : "—"}</div></div>`;
+    c.linhas.forEach(l=>{
+      const r = id(`simR${l.e.id}`), g = id(`simG${l.e.id}`), lu = id(`simL${l.e.id}`);
+      if (r) r.textContent = dinheiro(l.receita);
+      if (g) g.textContent = dinheiro(l.gastos);
+      if (lu){ lu.textContent = dinheiro(l.receita-l.gastos);
+        lu.style.color = (l.receita-l.gastos) < 0 ? "var(--perigo)" : "var(--texto)"; }
+      const tr = id(`simTr${l.e.id}`);
+      if (tr) tr.style.opacity = l.dentro ? "1" : ".42";
+    });
+  }
+
+  const corpo = id("simCorpo");
+  corpo.innerHTML = escolas.map(e=>`
+    <tr id="simTr${e.id}">
+      <td><input type="checkbox" data-sim="${e.id}" ${sim.selecionadas.includes(e.id)?"checked":""}
+        aria-label="${esc(e.escola)}" style="width:16px;height:16px"></td>
+      <td class="mono">${esc(e.inep)}</td>
+      <td><b>${esc(e.escola)}</b><br><small style="color:var(--texto-2)">${esc(e.cidade)}${e.uf?"/"+esc(e.uf):""} · ${esc(e.nomeParceiro||"—")}</small></td>
+      <td class="num"><input type="number" min="0" class="num" style="width:82px;text-align:right"
+        value="${apsDe(e)}" data-aps="${e.id}"></td>
+      <td class="num mono" id="simR${e.id}"></td>
+      <td class="num mono" id="simG${e.id}"></td>
+      <td class="num mono" id="simL${e.id}"></td>
+      <td><button class="btn neutro pequeno" data-editar="${e.id}">${t("editar")}</button></td>
+    </tr>`).join("");
+
+  corpo.querySelectorAll("[data-sim]").forEach(chk=> chk.onchange = ()=>{
+    const eid = chk.dataset.sim;
+    if (chk.checked){ if(!sim.selecionadas.includes(eid)) sim.selecionadas.push(eid); }
+    else sim.selecionadas = sim.selecionadas.filter(x=>x!==eid);
+    pintarTotais();
+  });
+  corpo.querySelectorAll("[data-aps]").forEach(inp=> inp.addEventListener("input", ()=>{
+    sim.aps[inp.dataset.aps] = Math.max(0, Math.trunc(Number(inp.value)||0));
+    pintarTotais();
+  }));
+  corpo.querySelectorAll("[data-editar]").forEach(bt=> bt.onclick = ()=>{
+    irPara("escolaForm", { escola: escolas.find(x=>x.id===bt.dataset.editar), voltarPara:"simulacao" });
+  });
+
+  id("sImposto").addEventListener("input", ()=>{ sim.imposto = Number(id("sImposto").value)||0; pintarTotais(); });
+  id("sSocio").addEventListener("input", ()=>{ sim.socio = Number(id("sSocio").value)||0; pintarTotais(); });
+  id("btTodas").onclick = ()=>{ sim.selecionadas = todos.slice(); desenhar(); };
+  id("btNenhuma").onclick = ()=>{ sim.selecionadas = []; desenhar(); };
+
+  pintarTotais();
 }
 
 /* ===================================================================
@@ -1182,29 +1354,20 @@ async function telaPedidoForm(alvo){
       return null;
     }).filter(Boolean);
     if (estouros.length > 0){
-      partes.push(`<div class="aviso perigo"><h4>${t("avisoEstouro")}</h4>
-        <ul>${estouros.map(x=>`<li>${x}</li>`).join("")}</ul></div>`);
+      partes.push(`<div class="aviso alerta"><h4>${t("avisoEstouro")}</h4>
+        <ul>${estouros.map(x=>`<li>${x}</li>`).join("")}</ul>
+        <p style="margin:8px 0 0">${t("excedeAviso")}</p></div>`);
     }
     alvoAviso.innerHTML = partes.join("");
   }
 
   // ---------------------------------------------------------------- envio
-  async function enviar(confirmar){
+  async function enviar(){
     try{
       const r = await api("pedidos.salvar", {
         id: rasc.id, fornecedor: rasc.fornecedor, observacao: rasc.observacao,
-        itens: rasc.itens, rateios: rasc.rateios, confirmarExcedente: confirmar === true,
+        itens: rasc.itens, rateios: rasc.rateios,
       });
-      if (r.precisaConfirmar){
-        abrirModal(t("limiteEstourado"), `
-          <div class="aviso perigo"><h4>${t("avisoEstouro")}</h4>
-            <ul>${r.alertas.map(a=>`<li><b class="mono">${esc(a.inep)}</b> ${esc(a.escola)} —
-              ${a.semLimite ? t("semLimite") : `${t("limite")} ${dinheiro(a.limite)} · ${t("gastoTotal")} ${dinheiro(a.novoGasto)} ·
-              <b>+${dinheiro(a.excedente)}</b>`}</li>`).join("")}</ul></div>`,
-          [{ texto:t("revisar"), classe:"btn neutro", acao: fecharModal },
-           { texto:t("confirmar"), classe:"btn perigo", acao: ()=>{ fecharModal(); enviar(true); } }]);
-        return;
-      }
       estado.rascunho = null;
       torrada(t("salvo"), "ok");
       irPara("pedidoDetalhe", { id: r.id });
@@ -1224,7 +1387,7 @@ async function telaPedidoForm(alvo){
   id("btEnviar").onclick = ()=>{
     const faltas = pendencias();
     if (faltas.length > 0){ torrada(faltas[0], "erro"); atualizarAviso(); return; }
-    enviar(false);
+    enviar();
   };
   if (id("fBuscaEscola")) id("fBuscaEscola").addEventListener("input", montarEscolas);
 
