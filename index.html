@@ -888,7 +888,7 @@ async function telaSimulacao(alvo){
         <thead><tr>
           <th style="width:34px"></th><th>${t("inep")}</th><th>${t("escola")}</th>
           <th class="num">${t("apsSimulados")}</th><th class="num">${t("receita")}</th>
-          <th class="num">${t("totalGastos")}</th><th class="num">${t("lucro")}</th><th></th>
+          <th class="num">${t("totalGastos")}</th><th class="num">${t("lucro")}</th>
         </tr></thead>
         <tbody id="simCorpo"></tbody>
       </table>
@@ -939,7 +939,6 @@ async function telaSimulacao(alvo){
       <td class="num mono" id="simR${e.id}"></td>
       <td class="num mono" id="simG${e.id}"></td>
       <td class="num mono" id="simL${e.id}"></td>
-      <td><button class="btn neutro pequeno" data-editar="${e.id}">${t("editar")}</button></td>
     </tr>`).join("");
 
   corpo.querySelectorAll("[data-sim]").forEach(chk=> chk.onchange = ()=>{
@@ -952,10 +951,6 @@ async function telaSimulacao(alvo){
     sim.aps[inp.dataset.aps] = Math.max(0, Math.trunc(Number(inp.value)||0));
     pintarTotais();
   }));
-  corpo.querySelectorAll("[data-editar]").forEach(bt=> bt.onclick = ()=>{
-    irPara("escolaForm", { escola: escolas.find(x=>x.id===bt.dataset.editar), voltarPara:"simulacao" });
-  });
-
   id("sImposto").addEventListener("input", ()=>{ sim.imposto = Number(id("sImposto").value)||0; pintarTotais(); });
   id("sSocio").addEventListener("input", ()=>{ sim.socio = Number(id("sSocio").value)||0; pintarTotais(); });
   id("btTodas").onclick = ()=>{ sim.selecionadas = todos.slice(); desenhar(); };
