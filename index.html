@@ -71,6 +71,12 @@ button{font-family:inherit}
 .rail .quem em{font-style:normal;font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:#8FA6C2}
 .conteudo{padding:26px 30px 60px;max-width:1500px}
 .cabeca{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:20px;flex-wrap:wrap}
+details.dobra summary{list-style:none;display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer}
+details.dobra summary::-webkit-details-marker{display:none}
+details.dobra summary h3{font-size:15px}
+details.dobra summary .seta{font-family:"IBM Plex Mono",monospace;color:var(--texto-3);font-size:12px}
+details.dobra[open] summary .seta{transform:rotate(90deg)}
+details.dobra summary .seta{display:inline-block;transition:transform .15s ease}
 .abas{display:inline-flex;background:var(--linha-2);border:1px solid var(--linha);border-radius:10px;padding:3px;gap:3px}
 .abas .aba{border:0;background:transparent;color:var(--texto-2);font-size:13.5px;font-weight:600;
   padding:8px 18px;border-radius:8px;cursor:pointer}
@@ -810,14 +816,21 @@ async function telaPainel(alvo){
   const percentualGasto = Number(kits.percentualGasto)||0;
 
   if (!estado.painel) estado.painel = {
-    aba:"real", busca:"", status:"", parceiro:"",
+    aba:"real", busca:"", status:"", parceiro:"", selReal:null,
     sim:{ imposto:Number(kits.percentualImposto)||0, socio:Number(kits.percentualSocio)||0, aps:{}, selecionadas:null },
   };
   const f = estado.painel;
   const sim = f.sim;
 
+  // Cada aba guarda a propria marcacao: filtrar na simulacao nao mexe no real.
   const todos = escolas.map(e=>e.id);
   sim.selecionadas = sim.selecionadas === null ? todos.slice() : sim.selecionadas.filter(x=>todos.includes(x));
+  f.selReal = f.selReal === null ? todos.slice() : f.selReal.filter(x=>todos.includes(x));
+
+  const marcadas = ()=> f.aba === "simulacao" ? sim.selecionadas : f.selReal;
+  function definirMarcadas(lista){
+    if (f.aba === "simulacao") sim.selecionadas = lista; else f.selReal = lista;
+  }
 
   const parceirosDaLista = [...new Set(escolas.map(e=>e.nomeParceiro).filter(Boolean))].sort();
   const apsDe = (e)=> sim.aps[e.id] !== undefined ? sim.aps[e.id] : (Number(e.apsBase)||0);
@@ -864,7 +877,7 @@ async function telaPainel(alvo){
       receita: Number(e.receitaReal)||0,
       gastos: Number(e.gastoTotalReal)||0,
       limite: Number(e.limiteReal)||0,
-      dentro: true,
+      dentro: f.selReal.includes(e.id),
     }));
   }
 
@@ -955,13 +968,14 @@ async function telaPainel(alvo){
           </select></div>
       </div>
 
-      ${(admin && f.aba==="simulacao")?`
+      ${admin?`
       <hr style="border:0;border-top:1px solid var(--linha);margin:14px 0">
       <div class="grade g4">
+        ${f.aba==="simulacao"?`
         <div class="campo" style="margin:0"><label for="sImposto">${t("imposto")}</label>
           <input id="sImposto" type="number" step="0.01" min="0" max="100" class="num" value="${sim.imposto}"></div>
         <div class="campo" style="margin:0"><label for="sSocio">${t("socio")}</label>
-          <input id="sSocio" type="number" step="0.01" min="0" max="100" class="num" value="${sim.socio}"></div>
+          <input id="sSocio" type="number" step="0.01" min="0" max="100" class="num" value="${sim.socio}"></div>`:""}
         <div class="campo" style="margin:0"><label>&nbsp;</label>
           <div class="barra-acoes">
             <button class="btn neutro pequeno" id="btTodas">${t("marcarVisiveis")}</button>
@@ -981,10 +995,52 @@ async function telaPainel(alvo){
     <div class="grade g4" id="pnVerba" style="margin-bottom:16px"></div>
     ${(!admin || f.aba==="real")?`<div class="grade g4" id="pnPedidos" style="margin-bottom:16px"></div>`:""}
 
+    ${(admin && f.aba==="real")?`
+    <details class="cartao dobra" style="margin-bottom:16px" id="pnKits" ${f.kitsAberto?"open":""}>
+      <summary class="cartao-pad">
+        <h3>${t("tabelaKits")}</h3>
+        <span class="seta">▶</span>
+      </summary>
+      <div class="cartao-pad" style="padding-top:0">
+        <div class="grade g2" style="align-items:start">
+          <div class="tabela-rolagem">
+            <table>
+              <thead><tr><th>${t("kit")}</th><th class="num">${t("aps")}</th><th class="num">${t("valor")}</th></tr></thead>
+              <tbody>
+                ${[...(kits.kits||[])].sort((a,b)=>a.aps-b.aps).map((k,i)=>`<tr>
+                  <td class="mono">KIT ${i+1}</td>
+                  <td class="num mono">${numero(k.aps)}</td>
+                  <td class="num mono">${dinheiro(k.valor)}</td></tr>`).join("")}
+                <tr><td class="mono">${t("apAdicional")}</td>
+                  <td class="num mono">+1</td>
+                  <td class="num mono">${dinheiro(kits.apAdicional||0)}</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div>
+            <div class="grade" style="gap:10px">
+              <div class="indicador"><div class="rotulo">${t("percentualImposto")}</div>
+                <div class="valor">${numero(kits.percentualImposto||0,2)}%</div></div>
+              <div class="indicador"><div class="rotulo">${t("percentualSocio")}</div>
+                <div class="valor">${numero(kits.percentualSocio||0,2)}%</div></div>
+              <div class="indicador"><div class="rotulo">${t("margemLucro")}</div>
+                <div class="valor">${numero(kits.margemLucro||0,2)}%</div></div>
+              <div class="indicador" style="border-color:var(--sinal)"><div class="rotulo">${t("percentualGasto")}</div>
+                <div class="valor">${numero(percentualGasto,2)}%</div>
+                <div class="nota">${t("percentualGastoNota")}</div></div>
+            </div>
+            <div class="barra-acoes" style="margin-top:12px">
+              <button class="btn neutro pequeno" id="btIrKits">${t("editar")}</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </details>`:""}
+
     <div class="cartao tabela-rolagem">
       <table>
         <thead><tr>
-          ${(admin && f.aba==="simulacao")?`<th style="width:34px"></th>`:""}
+          ${admin?`<th style="width:34px"></th>`:""}
           <th>${t("inep")}</th><th>${t("escola")}</th><th>${t("status")}</th>
           <th class="num">${(admin && f.aba==="simulacao")?t("apsSimulados"):t("aps")}</th>
           ${admin?`<th class="num">${t("receita")}</th>`:""}
@@ -1027,7 +1083,7 @@ async function telaPainel(alvo){
       const e = l.e;
       const lucro = l.receita - l.gastos;
       return `<tr style="opacity:${l.dentro?"1":".42"}">
-        ${simulando?`<td><input type="checkbox" data-sim="${e.id}" ${l.dentro?"checked":""}
+        ${admin?`<td><input type="checkbox" data-sim="${e.id}" ${l.dentro?"checked":""}
           aria-label="${esc(e.escola)}" style="width:16px;height:16px"></td>`:""}
         <td class="mono">${esc(e.inep)}</td>
         <td><b>${esc(e.escola)}</b><br><small style="color:var(--texto-2)">${esc(e.cidade)}${e.uf?"/"+esc(e.uf):""} · ${esc(e.nomeParceiro||"—")}</small></td>
@@ -1047,8 +1103,9 @@ async function telaPainel(alvo){
     corpo.querySelectorAll("[data-ver]").forEach(b=> b.onclick = ()=>irPara("escolaDetalhe",{id:b.dataset.ver}));
     corpo.querySelectorAll("[data-sim]").forEach(chk=> chk.onchange = ()=>{
       const eid = chk.dataset.sim;
-      if (chk.checked){ if(!sim.selecionadas.includes(eid)) sim.selecionadas.push(eid); }
-      else sim.selecionadas = sim.selecionadas.filter(x=>x!==eid);
+      const atual = marcadas();
+      if (chk.checked){ if(!atual.includes(eid)) definirMarcadas([...atual, eid]); }
+      else definirMarcadas(atual.filter(x=>x!==eid));
       pintar();
     });
     corpo.querySelectorAll("[data-aps]").forEach(inp=> inp.addEventListener("input", ()=>{
@@ -1058,6 +1115,10 @@ async function telaPainel(alvo){
   }
 
   // -------------------------------------------------------------- ligacoes
+  if (id("pnKits")){
+    id("pnKits").addEventListener("toggle", ()=>{ f.kitsAberto = id("pnKits").open; });
+    id("btIrKits").onclick = ()=>irPara("kits");
+  }
   if (admin){
     id("btAbaReal").onclick = ()=>{ f.aba = "real"; desenhar(); };
     id("btAbaSim").onclick = ()=>{ f.aba = "simulacao"; desenhar(); };
@@ -1073,12 +1134,13 @@ async function telaPainel(alvo){
   if (id("sImposto")) id("sImposto").addEventListener("input", ()=>{ sim.imposto = Number(id("sImposto").value)||0; pintar(); });
   if (id("sSocio")) id("sSocio").addEventListener("input", ()=>{ sim.socio = Number(id("sSocio").value)||0; pintar(); });
   if (id("btTodas")) id("btTodas").onclick = ()=>{
-    for (const e of visiveis()) if (!sim.selecionadas.includes(e.id)) sim.selecionadas.push(e.id);
+    const dentro = new Set([...marcadas(), ...visiveis().map(e=>e.id)]);
+    definirMarcadas([...dentro]);
     pintar();
   };
   if (id("btNenhuma")) id("btNenhuma").onclick = ()=>{
     const fora = new Set(visiveis().map(e=>e.id));
-    sim.selecionadas = sim.selecionadas.filter(x=>!fora.has(x));
+    definirMarcadas(marcadas().filter(x=>!fora.has(x)));
     pintar();
   };
 
