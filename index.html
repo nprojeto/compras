@@ -248,6 +248,10 @@ const IDIOMAS = {
     custosNota:"Cada linha vira gasto do INEP que receber este parceiro.",
     gastoParceiro:"Custo do parceiro", gastoEscola:"Custo especifico da escola",
     semCustos:"Nenhum custo cadastrado.",
+    ver:"Ver", detalheEscola:"Gastos do INEP", custosDoInep:"Composicao do gasto",
+    pedidosDoInep:"Pedidos de compra atribuidos", semPedidosInep:"Nenhum pedido atribuido a este INEP ainda.",
+    rateioNoPedido:"Coube a este INEP", ondeAplica:"Base",
+    quantidade:"Quantidade", subtotal:"Subtotal",
     perfilAdmin:"Administrador", perfilFinanceiro:"Financeiro", perfilComprador:"Comprador",
     salvar:"Salvar", cancelar:"Cancelar", editar:"Editar", excluir:"Excluir", voltar:"Voltar",
     buscar:"Buscar", nenhumResultado:"Nada encontrado",
@@ -324,6 +328,10 @@ const IDIOMAS = {
     custosNota:"Each line becomes a cost for every INEP assigned to this partner.",
     gastoParceiro:"Partner cost", gastoEscola:"School-specific cost",
     semCustos:"No costs registered.",
+    ver:"View", detalheEscola:"INEP spending", custosDoInep:"Cost breakdown",
+    pedidosDoInep:"Purchase orders assigned", semPedidosInep:"No orders assigned to this INEP yet.",
+    rateioNoPedido:"This INEP's share", ondeAplica:"Basis",
+    quantidade:"Quantity", subtotal:"Subtotal",
     perfilAdmin:"Administrator", perfilFinanceiro:"Finance", perfilComprador:"Buyer",
     salvar:"Save", cancelar:"Cancel", editar:"Edit", excluir:"Delete", voltar:"Back",
     buscar:"Search", nenhumResultado:"Nothing found",
@@ -450,6 +458,7 @@ function menuDoPerfil(){
   itens.push({ chave:"escolas", texto:t("escolas") });
   if (p === "comprador") itens.push({ chave:"pedidoNovo", texto:t("novoPedido") });
   itens.push({ chave:"pedidos", texto:t("pedidos") });
+  if (p === "comprador") itens.push({ chave:"parceiros", texto:t("parceiros") });
   if (p === "admin"){
     itens.push({ chave:"simulacao", texto:t("simulacao") });
     itens.push({ chave:"kits", texto:t("kits") });
@@ -471,6 +480,7 @@ const TELAS = {
   painel: telaPainel,
   escolas: telaEscolas,
   escolaForm: telaEscolaForm,
+  escolaDetalhe: telaEscolaDetalhe,
   simulacao: telaSimulacao,
   kits: telaKits,
   parceiros: telaParceiros,
@@ -707,7 +717,9 @@ async function telaPainel(alvo){
    =================================================================== */
 async function telaEscolas(alvo){
   carregando(alvo);
-  const admin = estado.usuario.perfil === "admin";
+  const perfil = estado.usuario.perfil;
+  const admin = perfil === "admin";
+  const podeCadastrar = admin || perfil === "comprador";
   try{
     const r = await api("escolas.listar", { busca: estado.dados.busca || "" });
     const linhas = r.escolas.map(e=>`
@@ -721,10 +733,11 @@ async function telaEscolas(alvo){
         ${admin?`<td class="num mono">${dinheiro(e.receita)}<br><small style="color:var(--texto-2)">${numero(e.percentualLimite,2)}%</small></td>`:""}
         <td style="min-width:230px">${barraCapacidade(e)}</td>
         <td class="num mono" style="color:${e.saldo<0?"var(--perigo)":"var(--ok)"}">${dinheiro(e.saldo)}</td>
-        ${admin?`<td><div class="barra-acoes">
-            <button class="btn neutro pequeno" data-editar="${e.id}">${t("editar")}</button>
-            <button class="btn neutro pequeno" data-excluir="${e.id}">${t("excluir")}</button>
-          </div></td>`:""}
+        <td><div class="barra-acoes">
+            <button class="btn neutro pequeno" data-ver="${e.id}">${t("ver")}</button>
+            ${podeCadastrar?`<button class="btn neutro pequeno" data-editar="${e.id}">${t("editar")}</button>`:""}
+            ${admin?`<button class="btn neutro pequeno" data-excluir="${e.id}">${t("excluir")}</button>`:""}
+          </div></td>
       </tr>`).join("");
 
     alvo.innerHTML = `
@@ -732,7 +745,7 @@ async function telaEscolas(alvo){
         <div><h1>${t("escolas")}</h1><p>${r.escolas.length} ${idioma==="pt-BR"?"registros":"records"}</p></div>
         <div class="barra-acoes">
           <input id="fBusca" placeholder="${t("buscar")}" value="${esc(estado.dados.busca||"")}" style="width:220px">
-          ${admin?`<button class="btn" id="btNova">${t("novaEscola")}</button>`:""}
+          ${podeCadastrar?`<button class="btn" id="btNova">${t("novaEscola")}</button>`:""}
           ${admin?`<button class="btn neutro" id="btKits">${t("tabelaKits")}</button>`:""}
         </div>
       </div>
@@ -743,20 +756,23 @@ async function telaEscolas(alvo){
             <th>${t("inep")}</th><th>${t("escola")}</th><th>${t("status")}</th>
             <th class="num">${t("apsInst")}</th><th>${t("miscelaneos")}</th>
             ${admin?`<th class="num">${t("receita")}</th>`:""}
-            <th>${t("uso")}</th><th class="num">${t("saldo")}</th>${admin?"<th></th>":""}
+            <th>${t("uso")}</th><th class="num">${t("saldo")}</th><th></th>
           </tr></thead>
           <tbody>${linhas}</tbody>
         </table>
       </div>`}`;
 
     id("fBusca").addEventListener("keydown", e=>{ if(e.key==="Enter") irPara("escolas",{busca:e.target.value}); });
-    if (admin){
+    alvo.querySelectorAll("[data-ver]").forEach(b=> b.onclick = ()=>irPara("escolaDetalhe", { id:b.dataset.ver }));
+    if (podeCadastrar){
       id("btNova").onclick = ()=>irPara("escolaForm", {});
-      id("btKits").onclick = ()=>irPara("kits");
       alvo.querySelectorAll("[data-editar]").forEach(b=> b.onclick = ()=>{
         const escola = r.escolas.find(x=>x.id===b.dataset.editar);
         irPara("escolaForm", { escola });
       });
+    }
+    if (admin){
+      id("btKits").onclick = ()=>irPara("kits");
       alvo.querySelectorAll("[data-excluir]").forEach(b=> b.onclick = async ()=>{
         if(!confirm(t("excluirConfirma"))) return;
         try{ await api("escolas.remover", { id:b.dataset.excluir }); torrada(t("salvo"),"ok"); desenhar(); }
@@ -851,7 +867,8 @@ async function telaKits(alvo){
    =================================================================== */
 async function telaEscolaForm(alvo){
   carregando(alvo);
-  await carregarKits();
+  const ehAdmin = estado.usuario.perfil === "admin";
+  if (ehAdmin) await carregarKits();
   const e = estado.dados.escola || {};
   const editando = !!e.id;
 
@@ -884,9 +901,10 @@ async function telaEscolaForm(alvo){
         <div class="campo"><label for="cApsPrev">${t("apsPrev")}</label><input id="cApsPrev" type="number" min="0" value="${e.qtdApsPrev??0}"></div>
         <div class="campo"><label for="cApsInst">${t("apsInst")}</label><input id="cApsInst" type="number" min="0" value="${e.qtdApsInst??0}"></div>
         <div class="campo"><label for="cRacks">${t("racks")}</label><input id="cRacks" type="number" min="0" value="${e.qtdRacks??1}"></div>
+        ${ehAdmin?`
         <div class="campo"><label for="cValorAp">${t("valorPorAp")}</label><input id="cValorAp" class="num" inputmode="numeric" value="${dinheiro(e.valorPorAp||0)}"></div>
         <div class="campo"><label for="cValorRack">${t("valorPorRack")}</label><input id="cValorRack" class="num" inputmode="numeric" value="${dinheiro(e.valorPorRack||0)}"></div>
-        <div class="campo"><label for="cPercentual">${t("percentualLimite")}</label><input id="cPercentual" type="number" step="0.01" min="0" max="100" value="${e.percentualLimite??0}"></div>
+        <div class="campo"><label for="cPercentual">${t("percentualLimite")}</label><input id="cPercentual" type="number" step="0.01" min="0" max="100" value="${e.percentualLimite??0}"></div>`:""}
         <div class="campo"><label for="cMisc">${t("miscelaneos")}</label>
           <select id="cMisc">
             <option value="nos" ${e.miscelaneosPor==="parceiro"?"":"selected"}>${t("miscelaneosNos")}</option>
@@ -897,7 +915,7 @@ async function telaEscolaForm(alvo){
           <select id="cAtivo"><option value="1" ${e.ativo===false?"":"selected"}>${t("ativo")}</option>
           <option value="0" ${e.ativo===false?"selected":""}>${t("inativo")}</option></select></div>
       </div>
-      <div id="previa" class="aviso info" style="margin:6px 0 16px"></div>
+      ${ehAdmin?`<div id="previa" class="aviso info" style="margin:6px 0 16px"></div>`:""}
       <div class="barra-acoes">
         <button class="btn" id="btSalvar">${t("salvar")}</button>
         <button class="btn neutro" id="btCancelar">${t("cancelar")}</button>
@@ -905,6 +923,7 @@ async function telaEscolaForm(alvo){
     </div>`;
 
   const previa = ()=>{
+    if (!ehAdmin) return;
     const aps = numVal("cApsInst");
     const receita = receitaPorAps(aps);
     const limite = receita * numVal("cPercentual")/100;
@@ -939,8 +958,10 @@ async function telaEscolaForm(alvo){
   id("cParceiro").addEventListener("change", seguirParceiro);
   seguirParceiro();
 
-  ["cValorAp","cValorRack"].forEach(c=> id(c).addEventListener("input", ()=>{ formatarMoeda(id(c)); previa(); }));
-  ["cApsInst","cPercentual","cRacks"].forEach(c=> id(c).addEventListener("input", previa));
+  if (ehAdmin){
+    ["cValorAp","cValorRack"].forEach(c=> id(c).addEventListener("input", ()=>{ formatarMoeda(id(c)); previa(); }));
+    ["cApsInst","cPercentual","cRacks"].forEach(c=> id(c).addEventListener("input", previa));
+  }
   previa();
 
   const voltar = estado.dados.voltarPara || "escolas";
@@ -951,12 +972,117 @@ async function telaEscolaForm(alvo){
         id: e.id || "", inep: val("cInep"), escola: val("cEscola"), cidade: val("cCidade"),
         uf: val("cUf"), projeto: val("cProjeto"), status: val("cStatus"), prioridade: val("cPrioridade"),
         qtdApsPrev: numVal("cApsPrev"), qtdApsInst: numVal("cApsInst"), parceiroId: val("cParceiro"),
-        valorPorAp: moedaVal("cValorAp"), valorPorRack: moedaVal("cValorRack"), qtdRacks: numVal("cRacks"),
-        miscelaneosPor: val("cMisc"), percentualLimite: numVal("cPercentual"), ativo: val("cAtivo")==="1",
+        valorPorAp: ehAdmin ? moedaVal("cValorAp") : 0,
+        valorPorRack: ehAdmin ? moedaVal("cValorRack") : 0,
+        qtdRacks: numVal("cRacks"),
+        miscelaneosPor: val("cMisc"),
+        percentualLimite: ehAdmin ? numVal("cPercentual") : 0,
+        ativo: val("cAtivo")==="1",
       });
       torrada(t("salvo"),"ok"); irPara(voltar);
     }catch(err){ torrada(err.message,"erro"); }
   };
+}
+
+/* ===================================================================
+   10b. TELA — GASTOS DE UM INEP
+   Mostra a composicao do gasto e cada pedido atribuido aquela escola.
+   =================================================================== */
+async function telaEscolaDetalhe(alvo){
+  carregando(alvo);
+  const admin = estado.usuario.perfil === "admin";
+  try{
+    const r = await api("escolas.detalhe", { id: estado.dados.id });
+    const e = r.escola;
+    const TIPOS = { ap:t("tipoAp"), rack:t("tipoRack"), kit:t("tipoKit"), fixo:t("tipoFixo") };
+
+    alvo.innerHTML = `
+      <div class="cabeca">
+        <div><h1>${esc(e.escola)}</h1>
+          <p class="mono">${esc(e.inep)} · ${esc(e.cidade)}${e.uf?"/"+esc(e.uf):""} · ${esc(e.projeto||"—")}
+            · ${esc(e.nomeParceiro||"—")}</p>
+          <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
+            ${seloEscola(e.status)}
+            <span class="selo cinza">${numero(e.qtdApsInst)} / ${numero(e.qtdApsPrev)} ${t("aps")}</span>
+            ${e.miscelaneosPor==="nos"?`<span class="selo azul">${t("miscelaneosNos")}</span>`:`<span class="selo cinza">${t("miscelaneosParceiro")}</span>`}
+          </div></div>
+        <button class="btn neutro" id="btVoltar">${t("voltar")}</button>
+      </div>
+
+      <div class="grade g4" style="margin-bottom:16px">
+        ${admin?`<div class="indicador"><div class="rotulo">${t("receita")}</div>
+          <div class="valor">${dinheiro(e.receita)}</div>
+          <div class="nota">${numero(e.percentualLimite,2)}% ${idioma==="pt-BR"?"liberado":"released"}</div></div>`:""}
+        <div class="indicador"><div class="rotulo">${t("limite")}</div><div class="valor">${dinheiro(e.limite)}</div></div>
+        <div class="indicador"><div class="rotulo">${t("gastoInstalacao")}</div><div class="valor">${dinheiro(e.gastoInstalacao)}</div></div>
+        <div class="indicador"><div class="rotulo">${t("gastoPedidos")}</div><div class="valor">${dinheiro(e.gastoPedidos)}</div></div>
+        <div class="indicador"><div class="rotulo">${t("gastoTotal")}</div><div class="valor">${dinheiro(e.gastoTotal)}</div></div>
+        <div class="indicador ${e.saldo<0?"perigo":"ok"}"><div class="rotulo">${t("saldo")}</div>
+          <div class="valor">${dinheiro(e.saldo)}</div>
+          <div class="nota">${e.limite>0?numero(e.percentualUso,1)+"% "+t("uso").toLowerCase():t("semLimite")}</div></div>
+      </div>
+
+      <div class="cartao cartao-pad" style="margin-bottom:16px">
+        <h3 style="margin-bottom:10px">${t("custosDoInep")}</h3>
+        ${barraCapacidade(e)}
+        ${admin?`
+        <div class="tabela-rolagem" style="margin-top:14px"><table>
+          <thead><tr><th>${t("descricao")}</th><th>${t("ondeAplica")}</th>
+            <th class="num">${t("valor")}</th><th class="num">${t("quantidade")}</th>
+            <th class="num">${t("subtotal")}</th></tr></thead>
+          <tbody>
+            ${(e.detalheParceiro||[]).map(c=>`<tr>
+              <td>${esc(c.descricao)}</td><td>${TIPOS[c.tipo]||esc(c.tipo)}</td>
+              <td class="num mono">${dinheiro(c.valor)}</td>
+              <td class="num mono">${numero(c.quantidade)}</td>
+              <td class="num mono">${dinheiro(c.total)}</td></tr>`).join("")}
+            ${e.gastoEscola>0?`<tr><td>${t("gastoEscola")}</td><td>${t("parceiro")}</td>
+              <td class="num mono">—</td><td class="num mono">—</td>
+              <td class="num mono">${dinheiro(e.gastoEscola)}</td></tr>`:""}
+            <tr><td colspan="4" style="text-align:right"><b>${t("gastoInstalacao")}</b></td>
+              <td class="num mono"><b>${dinheiro(e.gastoInstalacao)}</b></td></tr>
+          </tbody>
+        </table></div>`:""}
+      </div>
+
+      <div class="cartao">
+        <div class="cartao-pad" style="padding-bottom:0">
+          <h3>${t("pedidosDoInep")}</h3></div>
+        ${r.pedidos.length===0?`<div class="vazio">${t("semPedidosInep")}</div>`:
+          r.pedidos.map(p=>`
+          <div class="cartao-pad" style="border-bottom:1px solid var(--linha-2)">
+            <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center">
+              <div>
+                <b class="mono">#${p.numero}</b> ${seloStatus(p.status)}
+                ${p.excedeuLimite?`<span class="selo vermelho">${t("limiteEstourado")}</span>`:""}
+                <br><small style="color:var(--texto-2)">${dataHora(p.criadoEm)} · ${esc(p.compradorNome)}
+                ${p.fornecedor?" · "+esc(p.fornecedor):""}</small>
+              </div>
+              <div style="text-align:right">
+                <div class="mono"><b>${dinheiro(p.valorRateio)}</b></div>
+                <small style="color:var(--texto-2)">${t("rateioNoPedido")} · ${t("valorTotal")} ${dinheiro(p.valorTotal)}</small>
+              </div>
+            </div>
+            <div class="tabela-rolagem" style="margin-top:10px"><table>
+              <thead><tr><th>${t("descricao")}</th><th class="num">${t("qtd")}</th>
+                <th>${t("unidade")}</th><th class="num">${t("valorUnitario")}</th>
+                <th class="num">${t("valorTotal")}</th></tr></thead>
+              <tbody>${p.itens.map(i=>`<tr>
+                <td>${esc(i.descricao)}</td>
+                <td class="num mono">${numero(i.quantidade,3)}</td>
+                <td class="mono">${esc(i.unidade)}</td>
+                <td class="num mono">${dinheiro(i.valorUnitario)}</td>
+                <td class="num mono">${dinheiro(i.valorTotal)}</td></tr>`).join("")}</tbody>
+            </table></div>
+            <div class="barra-acoes" style="margin-top:10px">
+              <button class="btn neutro pequeno" data-pedido="${p.id}">${t("detalhe")}</button>
+            </div>
+          </div>`).join("")}
+      </div>`;
+
+    id("btVoltar").onclick = ()=>irPara("escolas");
+    alvo.querySelectorAll("[data-pedido]").forEach(b=> b.onclick = ()=>irPara("pedidoDetalhe",{id:b.dataset.pedido}));
+  }catch(err){ alvo.innerHTML = `<div class="aviso perigo">${esc(err.message)}</div>`; }
 }
 
 /* ===================================================================
