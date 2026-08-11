@@ -249,6 +249,12 @@ const IDIOMAS = {
     tipoAjuda:"Ajuda de custo", tipoBonus:"Bonus", tipoOutro:"Outros",
     porEscola:"Por escola", descricaoObrigatoria:"Descricao (obrigatoria)",
     usandoPrevisto:"calculado pelos previstos",
+    percentuaisGlobais:"Percentuais do negocio",
+    percentualImposto:"% de imposto", percentualSocio:"% do parceiro socio",
+    margemLucro:"% de margem de lucro", percentualGasto:"% liberado para gasto",
+    percentualGastoNota:"O que sobra depois de imposto, parceiro socio e margem. Ele preenche sozinho o limite de cada escola nova.",
+    percentualSoma:"Imposto + socio + margem nao pode passar de 100%.",
+    vemDosKits:"Vem dos percentuais cadastrados na tela de Kits.",
     apsPrevNota:"Obrigatorio. Enquanto nao houver AP instalado, receita e gastos saem daqui.",
     faltaApsPrev:"Informe a quantidade de APs previstos.",
     compraMiscelaneos:"Este parceiro compra os miscelaneos",
@@ -262,7 +268,7 @@ const IDIOMAS = {
     quantidade:"Quantidade", subtotal:"Subtotal",
     parceiroSemCustos:"Este parceiro nao tem custos cadastrados.",
     parceiroCompra:"Miscelaneos por conta do parceiro.",
-    parceiroNaoCompra:"Miscelaneos comprados por nos.",
+    parceiroNaoCompra:"Miscelaneos comprados pela Novale.",
     escolhaParceiro:"Escolha o parceiro: os valores por AP, por rack e a regra de miscelaneos vem do cadastro dele.",
     perfilAdmin:"Administrador", perfilFinanceiro:"Financeiro", perfilComprador:"Comprador",
     salvar:"Salvar", cancelar:"Cancelar", editar:"Editar", excluir:"Excluir", voltar:"Voltar",
@@ -270,7 +276,7 @@ const IDIOMAS = {
     inep:"INEP", escola:"Escola", cidade:"Cidade", uf:"UF", projeto:"Projeto",
     status:"Status", prioridade:"Prioridade", apsPrev:"APs previstos", apsInst:"APs instalados",
     parceiro:"Parceiro", valorPorAp:"Valor por AP", valorPorRack:"Valor por rack", racks:"Racks",
-    miscelaneos:"Miscelaneos", miscelaneosNos:"Compramos nos", miscelaneosParceiro:"Compra o parceiro",
+    miscelaneos:"Miscelaneos", miscelaneosNos:"Compra Novale", miscelaneosParceiro:"Compra o parceiro",
     percentualLimite:"% do recebido liberado para gasto",
     receita:"Valor a receber", limite:"Limite de gasto", gastoInstalacao:"Custo instalacao",
     gastoPedidos:"Compras", gastoTotal:"Gasto total", saldo:"Saldo", uso:"Uso",
@@ -338,6 +344,12 @@ const IDIOMAS = {
     tipoAjuda:"Cost support", tipoBonus:"Bonus", tipoOutro:"Other",
     porEscola:"Per school", descricaoObrigatoria:"Description (required)",
     usandoPrevisto:"based on planned APs",
+    percentuaisGlobais:"Business percentages",
+    percentualImposto:"% tax", percentualSocio:"% partner share",
+    margemLucro:"% profit margin", percentualGasto:"% released to spend",
+    percentualGastoNota:"What is left after tax, partner share and margin. It pre-fills the limit of every new school.",
+    percentualSoma:"Tax + partner share + margin cannot exceed 100%.",
+    vemDosKits:"Comes from the percentages set on the Kits screen.",
     apsPrevNota:"Required. Until an AP is installed, revenue and costs come from here.",
     faltaApsPrev:"Enter the number of planned APs.",
     compraMiscelaneos:"This partner buys the miscellaneous",
@@ -351,7 +363,7 @@ const IDIOMAS = {
     quantidade:"Quantity", subtotal:"Subtotal",
     parceiroSemCustos:"This partner has no costs registered.",
     parceiroCompra:"Miscellaneous bought by the partner.",
-    parceiroNaoCompra:"Miscellaneous bought by us.",
+    parceiroNaoCompra:"Miscellaneous bought by Novale.",
     escolhaParceiro:"Pick the partner: per-AP and per-rack values and the miscellaneous rule come from their record.",
     perfilAdmin:"Administrator", perfilFinanceiro:"Finance", perfilComprador:"Buyer",
     salvar:"Save", cancelar:"Cancel", editar:"Edit", excluir:"Delete", voltar:"Back",
@@ -359,7 +371,7 @@ const IDIOMAS = {
     inep:"INEP", escola:"School", cidade:"City", uf:"State", projeto:"Project",
     status:"Status", prioridade:"Priority", apsPrev:"Planned APs", apsInst:"Installed APs",
     parceiro:"Partner", valorPorAp:"Price per AP", valorPorRack:"Price per rack", racks:"Racks",
-    miscelaneos:"Miscellaneous", miscelaneosNos:"We buy", miscelaneosParceiro:"Partner buys",
+    miscelaneos:"Miscellaneous", miscelaneosNos:"Novale buys", miscelaneosParceiro:"Partner buys",
     percentualLimite:"% of revenue released to spend",
     receita:"Revenue", limite:"Spending limit", gastoInstalacao:"Install cost",
     gastoPedidos:"Purchases", gastoTotal:"Total spent", saldo:"Remaining", uso:"Usage",
@@ -745,7 +757,7 @@ async function telaPainel(alvo){
       <div class="cabeca"><div><h1>${t("painel")}</h1><p>${t("resumoFinanceiro")}</p></div></div>
       <div class="grade g4" style="margin-bottom:16px">
         <div class="indicador"><div class="rotulo">${t("escolasAtivas")}</div><div class="valor">${numero(tt.escolas)}</div>
-          <div class="nota">${numero(tt.escolasComMiscelaneosNossos)} ${idioma==="pt-BR"?"com compra nossa":"we buy for"}</div></div>
+          <div class="nota">${numero(tt.escolasComMiscelaneosNossos)} ${idioma==="pt-BR"?"com compra Novale":"bought by Novale"}</div></div>
         <div class="indicador"><div class="rotulo">${t("apsInstalados")}</div><div class="valor">${numero(tt.apsInst)}</div>
           <div class="nota">${numero(tt.apsPrev)} ${t("apsPrev").toLowerCase()}</div></div>
         ${admin ? `<div class="indicador"><div class="rotulo">${t("receita")}</div><div class="valor">${dinheiro(tt.receita)}</div></div>` : ""}
@@ -844,6 +856,12 @@ async function telaKits(alvo){
   const linhas = [...tabela.kits].sort((a,b)=>a.aps-b.aps)
     .map(k=>({ aps:Number(k.aps), valor:Number(k.valor) }));
   let adicional = Number(tabela.apAdicional)||0;
+  const pct = {
+    imposto: Number(tabela.percentualImposto)||0,
+    socio: Number(tabela.percentualSocio)||0,
+    margem: Number(tabela.margemLucro)||0,
+  };
+  const sobra = ()=> Math.round(Math.max(0, 100 - pct.imposto - pct.socio - pct.margem)*100)/100;
 
   alvo.innerHTML = `
     <div class="cabeca">
@@ -865,11 +883,27 @@ async function telaKits(alvo){
         </div>
       </div>
 
-      <div class="cartao cartao-pad">
-        <div class="campo"><label for="kAdicional">${t("apAdicional")}</label>
-          <input id="kAdicional" class="num" inputmode="numeric" value="${dinheiro(adicional)}">
-          <small style="color:var(--texto-3)">${t("apAdicionalNota")}</small></div>
-        <div class="aviso info">${t("kitsAviso")}</div>
+      <div>
+        <div class="cartao cartao-pad" style="margin-bottom:14px">
+          <div class="campo"><label for="kAdicional">${t("apAdicional")}</label>
+            <input id="kAdicional" class="num" inputmode="numeric" value="${dinheiro(adicional)}">
+            <small style="color:var(--texto-3)">${t("apAdicionalNota")}</small></div>
+        </div>
+
+        <div class="cartao cartao-pad">
+          <h3 style="margin-bottom:12px">${t("percentuaisGlobais")}</h3>
+          <div class="campo"><label for="kImposto">${t("percentualImposto")}</label>
+            <input id="kImposto" type="number" step="0.01" min="0" max="100" class="num" value="${pct.imposto}"></div>
+          <div class="campo"><label for="kSocio">${t("percentualSocio")}</label>
+            <input id="kSocio" type="number" step="0.01" min="0" max="100" class="num" value="${pct.socio}"></div>
+          <div class="campo"><label for="kMargem">${t("margemLucro")}</label>
+            <input id="kMargem" type="number" step="0.01" min="0" max="100" class="num" value="${pct.margem}"></div>
+          <div class="indicador" style="border-color:var(--sinal)">
+            <div class="rotulo">${t("percentualGasto")}</div>
+            <div class="valor" id="kSobra">${numero(sobra(),2)}%</div>
+            <div class="nota">${t("percentualGastoNota")}</div></div>
+          <div id="kAvisoSoma" style="margin-top:10px"></div>
+        </div>
       </div>
     </div>`;
 
@@ -902,9 +936,25 @@ async function telaKits(alvo){
     montar();
   };
   id("kAdicional").addEventListener("input", ()=>{ adicional = formatarMoeda(id("kAdicional")); });
+
+  function atualizarSobra(){
+    pct.imposto = Number(id("kImposto").value)||0;
+    pct.socio = Number(id("kSocio").value)||0;
+    pct.margem = Number(id("kMargem").value)||0;
+    const total = pct.imposto + pct.socio + pct.margem;
+    id("kSobra").textContent = numero(sobra(),2)+"%";
+    id("kAvisoSoma").innerHTML = total > 100
+      ? `<div class="aviso perigo">${t("percentualSoma")}</div>` : "";
+  }
+  ["kImposto","kSocio","kMargem"].forEach(c=> id(c).addEventListener("input", atualizarSobra));
+  atualizarSobra();
+
   id("btSalvarKits").onclick = async ()=>{
     try{
-      await api("kits.salvar", { kits: linhas, apAdicional: adicional });
+      await api("kits.salvar", {
+        kits: linhas, apAdicional: adicional,
+        percentualImposto: pct.imposto, percentualSocio: pct.socio, margemLucro: pct.margem,
+      });
       await carregarKits(true);
       torrada(t("salvo"), "ok");
       desenhar();
@@ -956,7 +1006,10 @@ async function telaEscolaForm(alvo){
         <div class="campo"><label for="cApsInst">${t("apsInst")}</label><input id="cApsInst" type="number" min="0" value="${e.qtdApsInst??0}"></div>
         <div class="campo"><label for="cRacks">${t("racks")}</label><input id="cRacks" type="number" min="0" value="${e.qtdRacks??1}"></div>
         ${ehAdmin?`
-        <div class="campo"><label for="cPercentual">${t("percentualLimite")}</label><input id="cPercentual" type="number" step="0.01" min="0" max="100" value="${e.percentualLimite??0}"></div>`:""}
+        <div class="campo"><label for="cPercentual">${t("percentualLimite")}</label>
+          <input id="cPercentual" type="number" step="0.01" min="0" max="100"
+            value="${e.percentualLimite ?? (estado.kits ? (Number(estado.kits.percentualGasto)||0) : 0)}">
+          <small style="color:var(--texto-3)">${t("vemDosKits")}</small></div>`:""}
       </div>
       ${ehAdmin?`<div id="previa" class="aviso info" style="margin:6px 0 16px"></div>`:""}
       <div class="barra-acoes">
@@ -1134,7 +1187,11 @@ async function telaSimulacao(alvo){
     escolas = (await api("escolas.listar", {})).escolas.filter(e=>e.ativo);
   }catch(e){ alvo.innerHTML = `<div class="aviso perigo">${esc(e.message)}</div>`; return; }
 
-  if (!estado.simulacao) estado.simulacao = { imposto:0, socio:0, selecionadas:null, aps:{} };
+  if (!estado.simulacao) estado.simulacao = {
+    imposto: Number(estado.kits && estado.kits.percentualImposto)||0,
+    socio: Number(estado.kits && estado.kits.percentualSocio)||0,
+    selecionadas:null, aps:{},
+  };
   const sim = estado.simulacao;
   const todos = escolas.map(e=>e.id);
   sim.selecionadas = sim.selecionadas === null ? todos.slice() : sim.selecionadas.filter(x=>todos.includes(x));
