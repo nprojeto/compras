@@ -248,6 +248,9 @@ const IDIOMAS = {
     tipoAp:"Por AP instalado", tipoRack:"Por rack", tipoKit:"Por kit", tipoFixo:"Valor fixo",
     tipoAjuda:"Ajuda de custo", tipoBonus:"Bonus", tipoOutro:"Outros",
     porEscola:"Por escola", descricaoObrigatoria:"Descricao (obrigatoria)",
+    usandoPrevisto:"calculado pelos previstos",
+    apsPrevNota:"Obrigatorio. Enquanto nao houver AP instalado, receita e gastos saem daqui.",
+    faltaApsPrev:"Informe a quantidade de APs previstos.",
     compraMiscelaneos:"Este parceiro compra os miscelaneos",
     compraMiscelaneosNota:"Marcando aqui, as escolas deste parceiro passam a constar como miscelaneos por conta dele.",
     custosNota:"Cada linha vira gasto do INEP que receber este parceiro.",
@@ -334,6 +337,9 @@ const IDIOMAS = {
     tipoAp:"Per installed AP", tipoRack:"Per rack", tipoKit:"Per kit", tipoFixo:"Flat amount",
     tipoAjuda:"Cost support", tipoBonus:"Bonus", tipoOutro:"Other",
     porEscola:"Per school", descricaoObrigatoria:"Description (required)",
+    usandoPrevisto:"based on planned APs",
+    apsPrevNota:"Required. Until an AP is installed, revenue and costs come from here.",
+    faltaApsPrev:"Enter the number of planned APs.",
     compraMiscelaneos:"This partner buys the miscellaneous",
     compraMiscelaneosNota:"When checked, schools of this partner are marked as partner-bought miscellaneous.",
     custosNota:"Each line becomes a cost for every INEP assigned to this partner.",
@@ -772,7 +778,8 @@ async function telaEscolas(alvo){
         <td class="mono">${esc(e.inep)}</td>
         <td><b>${esc(e.escola)}</b><br><small style="color:var(--texto-2)">${esc(e.cidade)}${e.uf?" / "+esc(e.uf):""} · ${esc(e.projeto||"—")}</small></td>
         <td>${seloEscola(e.status)}<br><small style="color:var(--texto-2)">${esc(e.prioridade)}</small></td>
-        <td class="num mono">${numero(e.qtdApsInst)} / ${numero(e.qtdApsPrev)}</td>
+        <td class="num mono">${numero(e.qtdApsInst)} / ${numero(e.qtdApsPrev)}
+          ${e.usandoPrevisto?`<br><small style="color:var(--alerta);font-family:Inter,sans-serif">${t("usandoPrevisto")}</small>`:""}</td>
         <td>${e.miscelaneosPor==="nos" ? `<span class="selo azul">${t("miscelaneosNos")}</span>` : `<span class="selo cinza">${t("miscelaneosParceiro")}</span>`}
             <br><small style="color:var(--texto-2)">${esc(e.nomeParceiro||"—")}</small></td>
         ${admin?`<td class="num mono">${dinheiro(e.receita)}<br><small style="color:var(--texto-2)">${numero(e.percentualLimite,2)}%</small></td>`:""}
@@ -943,7 +950,9 @@ async function telaEscolaForm(alvo){
             ${parceiros.map(x=>`<option value="${x.id}" ${e.parceiroId===x.id?"selected":""}>${esc(x.nome)}${x.ativo?"":" (inativo)"}</option>`).join("")}
           </select>
           <small style="color:var(--texto-3)" id="cParceiroNota">${parceiros.length===0?t("cadastreParceiro"):t("escolhaParceiro")}</small></div>
-        <div class="campo"><label for="cApsPrev">${t("apsPrev")}</label><input id="cApsPrev" type="number" min="0" value="${e.qtdApsPrev??0}"></div>
+        <div class="campo"><label for="cApsPrev">${t("apsPrev")} *</label>
+          <input id="cApsPrev" type="number" min="1" value="${e.qtdApsPrev||""}">
+          <small style="color:var(--texto-3)">${t("apsPrevNota")}</small></div>
         <div class="campo"><label for="cApsInst">${t("apsInst")}</label><input id="cApsInst" type="number" min="0" value="${e.qtdApsInst??0}"></div>
         <div class="campo"><label for="cRacks">${t("racks")}</label><input id="cRacks" type="number" min="0" value="${e.qtdRacks??1}"></div>
         ${ehAdmin?`
@@ -958,7 +967,7 @@ async function telaEscolaForm(alvo){
 
   const previa = ()=>{
     if (!ehAdmin) return;
-    const aps = numVal("cApsInst");
+    const aps = numVal("cApsInst") > 0 ? numVal("cApsInst") : numVal("cApsPrev");
     const receita = receitaPorAps(aps);
     const limite = receita * numVal("cPercentual")/100;
     const racks = numVal("cRacks");
@@ -992,13 +1001,14 @@ async function telaEscolaForm(alvo){
   seguirParceiro();
 
   if (ehAdmin){
-    ["cApsInst","cPercentual","cRacks"].forEach(c=> id(c).addEventListener("input", previa));
+    ["cApsInst","cApsPrev","cPercentual","cRacks"].forEach(c=> id(c).addEventListener("input", previa));
   }
   previa();
 
   const voltar = estado.dados.voltarPara || "escolas";
   id("btVoltar").onclick = id("btCancelar").onclick = ()=>irPara(voltar);
   id("btSalvar").onclick = async ()=>{
+    if (numVal("cApsPrev") <= 0){ torrada(t("faltaApsPrev"), "erro"); id("cApsPrev").focus(); return; }
     try{
       await api("escolas.salvar", {
         id: e.id || "", inep: val("cInep"), escola: val("cEscola"), cidade: val("cCidade"),
@@ -1031,6 +1041,7 @@ async function telaEscolaDetalhe(alvo){
           <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
             ${seloEscola(e.status)}
             <span class="selo cinza">${numero(e.qtdApsInst)} / ${numero(e.qtdApsPrev)} ${t("aps")}</span>
+            ${e.usandoPrevisto?`<span class="selo ambar">${t("usandoPrevisto")}</span>`:""}
             ${e.miscelaneosPor==="nos"?`<span class="selo azul">${t("miscelaneosNos")}</span>`:`<span class="selo cinza">${t("miscelaneosParceiro")}</span>`}
           </div></div>
         <button class="btn neutro" id="btVoltar">${t("voltar")}</button>
@@ -1128,7 +1139,7 @@ async function telaSimulacao(alvo){
   const todos = escolas.map(e=>e.id);
   sim.selecionadas = sim.selecionadas === null ? todos.slice() : sim.selecionadas.filter(x=>todos.includes(x));
 
-  const apsDe = (e)=> sim.aps[e.id] !== undefined ? sim.aps[e.id] : (Number(e.qtdApsInst)||0);
+  const apsDe = (e)=> sim.aps[e.id] !== undefined ? sim.aps[e.id] : (Number(e.apsBase)||0);
 
   function contas(){
     let receita = 0, gastos = 0;
