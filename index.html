@@ -246,6 +246,8 @@ const IDIOMAS = {
     apAdicionalNota:"Usado quando a quantidade de APs nao tem linha exata na tabela.",
     custosParceiro:"Custos do parceiro", adicionarCusto:"Adicionar custo",
     tipoAp:"Por AP instalado", tipoRack:"Por rack", tipoKit:"Por kit", tipoFixo:"Valor fixo",
+    tipoAjuda:"Ajuda de custo", tipoBonus:"Bonus", tipoOutro:"Outros",
+    porEscola:"Por escola", descricaoObrigatoria:"Descricao (obrigatoria)",
     compraMiscelaneos:"Este parceiro compra os miscelaneos",
     compraMiscelaneosNota:"Marcando aqui, as escolas deste parceiro passam a constar como miscelaneos por conta dele.",
     custosNota:"Cada linha vira gasto do INEP que receber este parceiro.",
@@ -330,6 +332,8 @@ const IDIOMAS = {
     apAdicionalNota:"Used when the AP count has no exact row in the table.",
     custosParceiro:"Partner costs", adicionarCusto:"Add cost",
     tipoAp:"Per installed AP", tipoRack:"Per rack", tipoKit:"Per kit", tipoFixo:"Flat amount",
+    tipoAjuda:"Cost support", tipoBonus:"Bonus", tipoOutro:"Other",
+    porEscola:"Per school", descricaoObrigatoria:"Description (required)",
     compraMiscelaneos:"This partner buys the miscellaneous",
     compraMiscelaneosNota:"When checked, schools of this partner are marked as partner-bought miscellaneous.",
     custosNota:"Each line becomes a cost for every INEP assigned to this partner.",
@@ -664,6 +668,22 @@ function barraCapacidade(e){
 }
 
 const STATUS_ESCOLA = ["Em andamento","Suspenso","Cancelado","Finalizado"];
+
+/* Tipos de custo do parceiro. Somente "outro" pede descricao. */
+function tiposCusto(){
+  return [["ap",t("tipoAp")],["kit",t("tipoKit")],["rack",t("tipoRack")],
+          ["ajuda",t("tipoAjuda")],["bonus",t("tipoBonus")],["outro",t("tipoOutro")]];
+}
+function nomeTipoCusto(tipo){
+  const achado = tiposCusto().find(([v])=>v===tipo);
+  return achado ? achado[1] : (tipo==="fixo" ? t("tipoFixo") : tipo);
+}
+function rotuloCusto(c){
+  return c.tipo === "outro" || c.tipo === "fixo" ? (c.descricao || t("tipoOutro")) : nomeTipoCusto(c.tipo);
+}
+function baseCusto(tipo){
+  return tipo==="ap" ? t("tipoAp") : tipo==="rack" ? t("tipoRack") : t("porEscola");
+}
 
 /* A tabela de kits vem do banco (o admin edita na tela de Kits).
    Se ainda nao foi carregada, cai no calculo classico: 1.740 + 610 por AP. */
@@ -1002,7 +1022,6 @@ async function telaEscolaDetalhe(alvo){
   try{
     const r = await api("escolas.detalhe", { id: estado.dados.id });
     const e = r.escola;
-    const TIPOS = { ap:t("tipoAp"), rack:t("tipoRack"), kit:t("tipoKit"), fixo:t("tipoFixo") };
 
     alvo.innerHTML = `
       <div class="cabeca">
@@ -1040,7 +1059,7 @@ async function telaEscolaDetalhe(alvo){
             <th class="num">${t("subtotal")}</th></tr></thead>
           <tbody>
             ${(e.detalheParceiro||[]).map(c=>`<tr>
-              <td>${esc(c.descricao)}</td><td>${TIPOS[c.tipo]||esc(c.tipo)}</td>
+              <td>${esc(rotuloCusto(c))}</td><td>${esc(baseCusto(c.tipo))}</td>
               <td class="num mono">${dinheiro(c.valor)}</td>
               <td class="num mono">${numero(c.quantidade)}</td>
               <td class="num mono">${dinheiro(c.total)}</td></tr>`).join("")}
@@ -1280,9 +1299,9 @@ async function telaParceiros(alvo){
 function modalParceiro(x){
   const novo = !x;
   const custos = (x && Array.isArray(x.custos) ? x.custos : []).map(c=>({
-    descricao:c.descricao, tipo:c.tipo, valor:Number(c.valor)||0
+    descricao:c.descricao||"", tipo:(c.tipo==="fixo"?"outro":c.tipo)||"ap", valor:Number(c.valor)||0
   }));
-  const TIPOS = [["ap",t("tipoAp")],["kit",t("tipoKit")],["rack",t("tipoRack")],["fixo",t("tipoFixo")]];
+  const TIPOS = tiposCusto();
 
   abrirModal(novo ? t("novoParceiro") : t("editar"), `
     <div class="campo"><label for="paNome">${t("nome")} *</label><input id="paNome" value="${esc(x?x.nome:"")}"></div>
@@ -1329,18 +1348,24 @@ function modalParceiro(x){
       return;
     }
     cont.innerHTML = custos.map((c,i)=>`
-      <div style="display:grid;grid-template-columns:1fr 140px 130px 34px;gap:7px;margin-bottom:7px;align-items:center">
-        <input value="${esc(c.descricao)}" placeholder="${t("descricao")}" data-cd="${i}">
-        <select data-ct="${i}">${TIPOS.map(([v,rot])=>`<option value="${v}" ${c.tipo===v?"selected":""}>${rot}</option>`).join("")}</select>
-        <input class="num" inputmode="numeric" value="${dinheiro(c.valor)}" data-cv="${i}">
-        <button class="btn neutro pequeno" data-cx="${i}">×</button>
+      <div style="border:1px solid var(--linha);border-radius:9px;padding:9px;margin-bottom:8px">
+        <div style="display:grid;grid-template-columns:1fr 130px 34px;gap:7px;align-items:center">
+          <select data-ct="${i}">${TIPOS.map(([v,rot])=>`<option value="${v}" ${c.tipo===v?"selected":""}>${rot}</option>`).join("")}</select>
+          <input class="num" inputmode="numeric" value="${dinheiro(c.valor)}" data-cv="${i}">
+          <button class="btn neutro pequeno" data-cx="${i}">×</button>
+        </div>
+        ${c.tipo==="outro"?`<input style="margin-top:7px" value="${esc(c.descricao)}"
+          placeholder="${t("descricaoObrigatoria")}" data-cd="${i}">`:""}
       </div>`).join("");
 
     cont.querySelectorAll("[data-cd]").forEach(inp=> inp.addEventListener("input", ()=>{
       custos[Number(inp.dataset.cd)].descricao = inp.value;
     }));
     cont.querySelectorAll("[data-ct]").forEach(sel=> sel.addEventListener("change", ()=>{
-      custos[Number(sel.dataset.ct)].tipo = sel.value;
+      const linha = custos[Number(sel.dataset.ct)];
+      linha.tipo = sel.value;
+      if (linha.tipo !== "outro") linha.descricao = "";
+      montarCustos();                       // abre ou fecha o campo de descricao
     }));
     cont.querySelectorAll("[data-cv]").forEach(inp=> inp.addEventListener("input", ()=>{
       custos[Number(inp.dataset.cv)].valor = formatarMoeda(inp);
@@ -1350,7 +1375,7 @@ function modalParceiro(x){
     });
   }
 
-  id("btAddCusto").onclick = ()=>{ custos.push({descricao:"",tipo:"fixo",valor:0}); montarCustos(); };
+  id("btAddCusto").onclick = ()=>{ custos.push({descricao:"",tipo:"ap",valor:0}); montarCustos(); };
   montarCustos();
 }
 
