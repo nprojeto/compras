@@ -261,6 +261,10 @@ const IDIOMAS = {
     marcarVisiveis:"Marcar visiveis", desmarcarVisiveis:"Desmarcar visiveis",
     visiveis:"visiveis", limparFiltros:"Limpar filtros", nenhumFiltro:"Nada bate com o filtro.",
     visaoReal:"Real", visaoProjetada:"Projetado",
+    stCRIADO:"Criado", stREENVIADO:"Reenviado", stEDITADO:"Editado",
+    salvarAlteracoes:"Salvar alteracoes",
+    editarPago:"Este pedido ja foi pago. A correcao mantem o status de pago e fica registrada no historico.",
+    soAdminEditaPago:"Pedido pago: so o administrador pode corrigir.",
     visaoRealNota:"So o que ja esta instalado. Escola sem AP instalado entra zerada.",
     visaoProjetadaNota:"Usa os APs previstos onde ainda nao ha instalacao.",
     escolasNoRecorte:"escolas no recorte", verEscola:"Abrir",
@@ -372,6 +376,10 @@ const IDIOMAS = {
     marcarVisiveis:"Select visible", desmarcarVisiveis:"Clear visible",
     visiveis:"visible", limparFiltros:"Clear filters", nenhumFiltro:"Nothing matches the filter.",
     visaoReal:"Actual", visaoProjetada:"Projected",
+    stCRIADO:"Created", stREENVIADO:"Resent", stEDITADO:"Edited",
+    salvarAlteracoes:"Save changes",
+    editarPago:"This order is already paid. The fix keeps the paid status and is recorded in the history.",
+    soAdminEditaPago:"Paid order: only the administrator can fix it.",
     visaoRealNota:"Only what is installed. Schools with no installed AP count as zero.",
     visaoProjetadaNota:"Uses planned APs wherever nothing is installed yet.",
     escolasNoRecorte:"schools in view", verEscola:"Open",
@@ -1835,6 +1843,7 @@ async function telaPedidoForm(alvo){
 
   const UNIDADES = ["UN","PC","CX","M","M2","M3","KG","L","RL","CJ","PAR","SC"];
   const editando = !!rasc.id;
+  const jaPago = estado.dados.statusAtual === "PAGO";
 
   const totalItem = (i)=> Math.round(((Number(i.quantidade)||0)*(Number(i.valorUnitario)||0))*100)/100;
   const totalPedido = ()=> Math.round(rasc.itens.reduce((s,i)=> s+totalItem(i), 0)*100)/100;
@@ -1857,7 +1866,8 @@ async function telaPedidoForm(alvo){
         <p>${t("destino")}</p></div>
       <button class="btn neutro" id="btVoltar">${t("voltar")}</button>
     </div>
-    ${editando && estado.dados.observacaoFinanceiro ? `<div class="aviso alerta" style="margin-bottom:16px">
+    ${jaPago ? `<div class="aviso perigo" style="margin-bottom:16px">${t("editarPago")}</div>`:""}
+    ${editando && !jaPago && estado.dados.observacaoFinanceiro ? `<div class="aviso alerta" style="margin-bottom:16px">
       <h4>${t("decisao")}</h4>${esc(estado.dados.observacaoFinanceiro)}</div>`:""}
 
     <div class="pedido-grade">
@@ -1883,7 +1893,7 @@ async function telaPedidoForm(alvo){
         <div class="lista-rolagem" id="listaEscolas"></div>`}
         <div id="avisoRateio" style="margin-top:12px"></div>
         <div class="barra-acoes" style="margin-top:14px">
-          <button class="btn" id="btEnviar">${editando ? t("reenviar") : t("enviarFinanceiro")}</button>
+          <button class="btn" id="btEnviar">${jaPago ? t("salvarAlteracoes") : (editando ? t("reenviar") : t("enviarFinanceiro"))}</button>
         </div>
       </div>
     </div>`;
@@ -2094,7 +2104,8 @@ async function telaPedidoDetalhe(alvo){
     const p = r.pedido;
     const perfil = estado.usuario.perfil;
     const podeDecidir = (perfil==="financeiro"||perfil==="admin") && p.status!=="PAGO";
-    const podeEditar = (perfil==="comprador"||perfil==="admin") && ["EM_ESPERA","RECUSADO"].includes(p.status);
+    // Admin corrige qualquer pedido; o comprador, os proprios que ainda nao foram pagos.
+    const podeEditar = perfil==="admin" || (perfil==="comprador" && p.status!=="PAGO");
     const ultimaObs = [...r.eventos].reverse().find(ev=> ev.observacao);
 
     alvo.innerHTML = `
@@ -2104,6 +2115,7 @@ async function telaPedidoDetalhe(alvo){
              ${p.fornecedor?` · ${t("fornecedor")}: ${esc(p.fornecedor)}`:""}</p></div>
         <div class="barra-acoes">
           ${podeEditar?`<button class="btn" id="btEditar">${t("editar")}</button>`:""}
+          ${(!podeEditar && p.status==="PAGO")?`<span class="selo cinza" style="align-self:center">${t("soAdminEditaPago")}</span>`:""}
           <button class="btn neutro" id="btVoltar">${t("voltar")}</button>
         </div>
       </div>
@@ -2172,7 +2184,8 @@ async function telaPedidoDetalhe(alvo){
         itens: r.itens.map(i=>({descricao:i.descricao, quantidade:Number(i.quantidade), unidade:i.unidade, valorUnitario:Number(i.valorUnitario)})),
         rateios: r.rateios.map(x=>({escolaId:x.escolaId, valor:Number(x.valor)})),
       };
-      irPara("pedidoNovo", { numero:p.numero, observacaoFinanceiro: ultimaObs?ultimaObs.observacao:"" });
+      irPara("pedidoNovo", { numero:p.numero, statusAtual:p.status,
+        observacaoFinanceiro: ultimaObs?ultimaObs.observacao:"" });
     };
     alvo.querySelectorAll("[data-decisao]").forEach(b=> b.onclick = async ()=>{
       const decisao = b.dataset.decisao;
