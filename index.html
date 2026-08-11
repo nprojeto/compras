@@ -258,6 +258,7 @@ const IDIOMAS = {
     custosParceiro:"Custos do parceiro", adicionarCusto:"Adicionar custo",
     tipoAp:"Por AP instalado", tipoRack:"Por rack", tipoKit:"Por kit", tipoFixo:"Valor fixo",
     tipoAjuda:"Ajuda de custo", tipoBonus:"Bonus", tipoOutro:"Outros",
+    editarKits:"Editar valores",
     porEscola:"Por escola", descricaoObrigatoria:"Descricao (obrigatoria)",
     usandoPrevisto:"calculado pelos previstos",
     percentuaisGlobais:"Percentuais do negocio",
@@ -373,6 +374,7 @@ const IDIOMAS = {
     custosParceiro:"Partner costs", adicionarCusto:"Add cost",
     tipoAp:"Per installed AP", tipoRack:"Per rack", tipoKit:"Per kit", tipoFixo:"Flat amount",
     tipoAjuda:"Cost support", tipoBonus:"Bonus", tipoOutro:"Other",
+    editarKits:"Edit values",
     porEscola:"Per school", descricaoObrigatoria:"Description (required)",
     usandoPrevisto:"based on planned APs",
     percentuaisGlobais:"Business percentages",
@@ -994,15 +996,16 @@ async function telaPainel(alvo){
       </div>
     </div>
 
-    ${admin?`<div class="grade g4" id="pnLucro" style="margin-bottom:16px"></div>`:""}
-    <div class="grade g4" id="pnVerba" style="margin-bottom:16px"></div>
-    ${(!admin || f.aba==="real")?`<div class="grade g4" id="pnPedidos" style="margin-bottom:16px"></div>`:""}
-
     ${(admin && f.aba==="real")?`
     <details class="cartao dobra" style="margin-bottom:16px" id="pnKits" ${f.kitsAberto?"open":""}>
       <summary class="cartao-pad">
-        <h3>${t("tabelaKits")}</h3>
-        <span class="seta">▶</span>
+        <span style="display:flex;align-items:center;gap:10px">
+          <span class="seta">▶</span>
+          <h3>${t("tabelaKits")}</h3>
+          <span class="selo cinza">${numero((kits.kits||[]).length)} ${t("kits").toLowerCase()}</span>
+          <span class="selo azul">${numero(percentualGasto,2)}% ${t("percentualGasto").toLowerCase()}</span>
+        </span>
+        <span class="btn neutro pequeno" id="btIrKits" role="button" tabindex="0">${t("editarKits")}</span>
       </summary>
       <div class="cartao-pad" style="padding-top:0">
         <div class="grade g2" style="align-items:start">
@@ -1020,25 +1023,25 @@ async function telaPainel(alvo){
               </tbody>
             </table>
           </div>
-          <div>
-            <div class="grade" style="gap:10px">
-              <div class="indicador"><div class="rotulo">${t("percentualImposto")}</div>
-                <div class="valor">${numero(kits.percentualImposto||0,2)}%</div></div>
-              <div class="indicador"><div class="rotulo">${t("percentualSocio")}</div>
-                <div class="valor">${numero(kits.percentualSocio||0,2)}%</div></div>
-              <div class="indicador"><div class="rotulo">${t("margemLucro")}</div>
-                <div class="valor">${numero(kits.margemLucro||0,2)}%</div></div>
-              <div class="indicador" style="border-color:var(--sinal)"><div class="rotulo">${t("percentualGasto")}</div>
-                <div class="valor">${numero(percentualGasto,2)}%</div>
-                <div class="nota">${t("percentualGastoNota")}</div></div>
-            </div>
-            <div class="barra-acoes" style="margin-top:12px">
-              <button class="btn neutro pequeno" id="btIrKits">${t("editar")}</button>
-            </div>
+          <div class="grade" style="gap:10px">
+            <div class="indicador"><div class="rotulo">${t("percentualImposto")}</div>
+              <div class="valor">${numero(kits.percentualImposto||0,2)}%</div></div>
+            <div class="indicador"><div class="rotulo">${t("percentualSocio")}</div>
+              <div class="valor">${numero(kits.percentualSocio||0,2)}%</div></div>
+            <div class="indicador"><div class="rotulo">${t("margemLucro")}</div>
+              <div class="valor">${numero(kits.margemLucro||0,2)}%</div></div>
+            <div class="indicador" style="border-color:var(--sinal)"><div class="rotulo">${t("percentualGasto")}</div>
+              <div class="valor">${numero(percentualGasto,2)}%</div>
+              <div class="nota">${t("percentualGastoNota")}</div></div>
           </div>
         </div>
       </div>
     </details>`:""}
+
+    ${admin?`<div class="grade g4" id="pnLucro" style="margin-bottom:16px"></div>`:""}
+    <div class="grade g4" id="pnVerba" style="margin-bottom:16px"></div>
+    ${(!admin || f.aba==="real")?`<div class="grade g4" id="pnPedidos" style="margin-bottom:16px"></div>`:""}
+
 
     <div class="cartao tabela-rolagem">
       <table>
@@ -1120,7 +1123,7 @@ async function telaPainel(alvo){
   // -------------------------------------------------------------- ligacoes
   if (id("pnKits")){
     id("pnKits").addEventListener("toggle", ()=>{ f.kitsAberto = id("pnKits").open; });
-    id("btIrKits").onclick = ()=>irPara("kits");
+    id("btIrKits").onclick = (ev)=>{ ev.preventDefault(); ev.stopPropagation(); irPara("kits"); };
   }
   if (admin){
     id("btAbaReal").onclick = ()=>{ f.aba = "real"; desenhar(); };
