@@ -331,7 +331,8 @@ const IDIOMAS = {
     stREMOVEU_ANEXO:"Removeu anexo",
     documentos:"Documentos", anexoNf:"Nota fiscal", anexoComprovante:"Comprovante de pagamento",
     anexoNfQuem:"Anexada pelo comprador", anexoComprovanteQuem:"Anexado pelo financeiro",
-    anexar:"Anexar arquivo", trocarArquivo:"Trocar arquivo", baixar:"Baixar", removerAnexo:"Remover",
+    anexar:"Anexar arquivo", maisUm:"Anexar mais um", baixar:"Baixar", removerAnexo:"Remover",
+    arquivos:"arquivos", arquivo:"arquivo",
     semAnexo:"Ainda sem arquivo", enviandoArquivo:"Enviando...",
     arquivoGrande:"O arquivo passa de 5 MB. Reduza antes de anexar.",
     faltaDocumento:"Falta anexar:", pedidoAguardaDoc:"Aprovado, mas so vira pago quando os dois documentos estiverem no sistema.",
@@ -457,7 +458,8 @@ const IDIOMAS = {
     stREMOVEU_ANEXO:"Removed attachment",
     documentos:"Documents", anexoNf:"Invoice", anexoComprovante:"Payment receipt",
     anexoNfQuem:"Attached by the buyer", anexoComprovanteQuem:"Attached by finance",
-    anexar:"Attach file", trocarArquivo:"Replace file", baixar:"Download", removerAnexo:"Remove",
+    anexar:"Attach file", maisUm:"Attach another", baixar:"Download", removerAnexo:"Remove",
+    arquivos:"files", arquivo:"file",
     semAnexo:"No file yet", enviandoArquivo:"Uploading...",
     arquivoGrande:"File is over 5 MB. Shrink it before attaching.",
     faltaDocumento:"Still missing:", pedidoAguardaDoc:"Approved, but it only turns paid once both documents are in the system.",
@@ -1767,7 +1769,7 @@ async function telaPedidos(alvo){
           <td class="num mono">${dinheiro(p.valorTotal)}</td>
           <td>${seloStatus(p.status)}
             <br><small class="mono" style="color:var(--texto-2)">
-              ${p.temNf?"NF ✓":"NF —"} · ${p.temComprovante?"Comp. ✓":"Comp. —"}</small></td>
+              ${p.qtdNf>0?`NF ${p.qtdNf}`:"NF —"} · ${p.qtdComprovante>0?`Comp. ${p.qtdComprovante}`:"Comp. —"}</small></td>
           <td><button class="btn neutro pequeno" data-abrir="${p.id}">${t("detalhe")}</button></td>
         </tr>`).join("")}</tbody>
       </table></div>`}`;
@@ -2146,47 +2148,60 @@ async function telaPedidoDetalhe(alvo){
       </div>`;
 
     // ---- documentos: NF do comprador, comprovante do financeiro ----
+    // Cada tipo aceita varios arquivos: a lista cresce a cada envio.
     function montarAnexo(tipo){
       const alvoAnexo = id(tipo === "nf" ? "anexoNf" : "anexoComprovante");
-      const anexo = r.anexos.find(x=>x.tipo===tipo);
+      const lista = r.anexos.filter(x=>x.tipo===tipo);
       const podeMexer = perfil==="admin" ||
         (tipo==="nf" && perfil==="comprador" && p.status!=="RECUSADO") ||
         (tipo==="comprovante" && perfil==="financeiro" && p.status!=="RECUSADO");
 
       alvoAnexo.innerHTML = `
-        <div class="anexo ${anexo?"":"vazio-arq"}">
+        <div class="anexo ${lista.length?"":"vazio-arq"}">
           <div class="titulo">
             <h4>${tipo==="nf"?t("anexoNf"):t("anexoComprovante")}</h4>
-            ${anexo?`<span class="selo verde">✓</span>`:`<span class="selo cinza">${t("semAnexo")}</span>`}
+            ${lista.length
+              ? `<span class="selo verde">${numero(lista.length)} ${lista.length===1?t("arquivo"):t("arquivos")}</span>`
+              : `<span class="selo cinza">${t("semAnexo")}</span>`}
           </div>
-          ${anexo?`
-            <div class="arquivo">${esc(anexo.nomeArquivo)}</div>
-            <small style="color:var(--texto-2)">${tamanhoLegivel(anexo.tamanho)} ·
-              ${esc(anexo.usuarioNome)} · ${dataHora(anexo.criadoEm)}</small>`
-          :`<small style="color:var(--texto-2)">${tipo==="nf"?t("anexoNfQuem"):t("anexoComprovanteQuem")}</small>`}
-          <div class="barra-acoes" style="margin-top:10px">
-            ${anexo?`<button class="btn neutro pequeno" data-baixar="${anexo.id}">${t("baixar")}</button>`:""}
-            ${podeMexer?`<button class="btn neutro pequeno" data-enviar="${tipo}">
-              ${anexo?t("trocarArquivo"):t("anexar")}</button>`:""}
-            ${anexo&&podeMexer?`<button class="btn neutro pequeno" data-remover="${anexo.id}">${t("removerAnexo")}</button>`:""}
-          </div>
-          <input type="file" data-campo="${tipo}" style="display:none">
+          ${lista.length ? lista.map(x=>`
+            <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;
+                        padding:7px 0;border-bottom:1px solid var(--linha-2)">
+              <div style="min-width:0">
+                <div class="arquivo">${esc(x.nomeArquivo)}</div>
+                <small style="color:var(--texto-2)">${tamanhoLegivel(x.tamanho)} ·
+                  ${esc(x.usuarioNome)} · ${dataHora(x.criadoEm)}</small>
+              </div>
+              <div class="barra-acoes" style="flex:none">
+                <button class="btn neutro pequeno" data-baixar="${x.id}">${t("baixar")}</button>
+                ${podeMexer?`<button class="btn neutro pequeno" data-remover="${x.id}">${t("removerAnexo")}</button>`:""}
+              </div>
+            </div>`).join("")
+          : `<small style="color:var(--texto-2)">${tipo==="nf"?t("anexoNfQuem"):t("anexoComprovanteQuem")}</small>`}
+          ${podeMexer?`<div class="barra-acoes" style="margin-top:10px">
+            <button class="btn neutro pequeno" data-enviar="${tipo}">
+              ${lista.length?t("maisUm"):t("anexar")}</button>
+          </div>`:""}
+          <input type="file" data-campo="${tipo}" multiple style="display:none">
         </div>`;
 
       const campo = alvoAnexo.querySelector(`[data-campo="${tipo}"]`);
       const botao = alvoAnexo.querySelector("[data-enviar]");
       if (botao) botao.onclick = ()=> campo.click();
 
-      campo.onchange = async ()=>{
-        const arquivo = campo.files[0];
-        if (!arquivo) return;
-        if (arquivo.size > 5*1024*1024){ torrada(t("arquivoGrande"), "erro"); campo.value=""; return; }
+      if (campo) campo.onchange = async ()=>{
+        const arquivos = [...campo.files];
+        if (arquivos.length === 0) return;
+        const grande = arquivos.find(x=>x.size > 5*1024*1024);
+        if (grande){ torrada(`${esc(grande.name)}: ${t("arquivoGrande")}`, "erro"); campo.value=""; return; }
         if (botao){ botao.disabled = true; botao.textContent = t("enviandoArquivo"); }
         try{
-          const conteudo = await lerArquivo(arquivo);
-          await api("pedidos.anexar", {
-            pedidoId: p.id, tipo, nome: arquivo.name, mime: arquivo.type, conteudo,
-          });
+          for (const arquivo of arquivos){
+            const conteudo = await lerArquivo(arquivo);
+            await api("pedidos.anexar", {
+              pedidoId: p.id, tipo, nome: arquivo.name, mime: arquivo.type, conteudo,
+            });
+          }
           torrada(t("salvo"), "ok");
           desenhar();
         }catch(err){
@@ -2195,23 +2210,21 @@ async function telaPedidoDetalhe(alvo){
         }
       };
 
-      const baixar = alvoAnexo.querySelector("[data-baixar]");
-      if (baixar) baixar.onclick = async ()=>{
+      alvoAnexo.querySelectorAll("[data-baixar]").forEach(bt=> bt.onclick = async ()=>{
         try{
-          const link = await api("pedidos.linkAnexo", { id: baixar.dataset.baixar });
+          const link = await api("pedidos.linkAnexo", { id: bt.dataset.baixar });
           window.open(link.url, "_blank");
         }catch(err){ torrada(err.message, "erro", err.codigo); }
-      };
+      });
 
-      const remover = alvoAnexo.querySelector("[data-remover]");
-      if (remover) remover.onclick = async ()=>{
+      alvoAnexo.querySelectorAll("[data-remover]").forEach(bt=> bt.onclick = async ()=>{
         if (!confirm(t("removerAnexoConfirma"))) return;
         try{
-          await api("pedidos.removerAnexo", { id: remover.dataset.remover });
+          await api("pedidos.removerAnexo", { id: bt.dataset.remover });
           torrada(t("salvo"), "ok");
           desenhar();
         }catch(err){ torrada(err.message, "erro", err.codigo); }
-      };
+      });
     }
     montarAnexo("nf");
     montarAnexo("comprovante");
