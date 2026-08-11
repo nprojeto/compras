@@ -238,6 +238,16 @@ const IDIOMAS = {
     notaSimulacao:"Mexer nos APs aqui nao altera o cadastro: e so simulacao.",
     baseSocioNota:"recebido menos gastos e impostos",
     excedeAviso:"Passa do limite, mas o pedido pode ser enviado assim mesmo.",
+    kits:"Kits", apAdicional:"AP adicional", aps:"APs", adicionarKit:"Adicionar linha",
+    kitsAviso:"Estes valores definem o que recebemos por escola. Mexer aqui muda receita, limite e margem de todos os INEPs.",
+    apAdicionalNota:"Usado quando a quantidade de APs nao tem linha exata na tabela.",
+    custosParceiro:"Custos do parceiro", adicionarCusto:"Adicionar custo",
+    tipoAp:"Por AP instalado", tipoRack:"Por rack", tipoKit:"Por kit", tipoFixo:"Valor fixo",
+    compraMiscelaneos:"Este parceiro compra os miscelaneos",
+    compraMiscelaneosNota:"Marcando aqui, as escolas deste parceiro passam a constar como miscelaneos por conta dele.",
+    custosNota:"Cada linha vira gasto do INEP que receber este parceiro.",
+    gastoParceiro:"Custo do parceiro", gastoEscola:"Custo especifico da escola",
+    semCustos:"Nenhum custo cadastrado.",
     perfilAdmin:"Administrador", perfilFinanceiro:"Financeiro", perfilComprador:"Comprador",
     salvar:"Salvar", cancelar:"Cancelar", editar:"Editar", excluir:"Excluir", voltar:"Voltar",
     buscar:"Buscar", nenhumResultado:"Nada encontrado",
@@ -304,6 +314,16 @@ const IDIOMAS = {
     notaSimulacao:"Changing APs here does not touch the record: simulation only.",
     baseSocioNota:"revenue minus costs and taxes",
     excedeAviso:"Over the limit, but the order can still be sent.",
+    kits:"Kits", apAdicional:"Extra AP", aps:"APs", adicionarKit:"Add row",
+    kitsAviso:"These values define what we receive per school. Changing them shifts revenue, limits and margins everywhere.",
+    apAdicionalNota:"Used when the AP count has no exact row in the table.",
+    custosParceiro:"Partner costs", adicionarCusto:"Add cost",
+    tipoAp:"Per installed AP", tipoRack:"Per rack", tipoKit:"Per kit", tipoFixo:"Flat amount",
+    compraMiscelaneos:"This partner buys the miscellaneous",
+    compraMiscelaneosNota:"When checked, schools of this partner are marked as partner-bought miscellaneous.",
+    custosNota:"Each line becomes a cost for every INEP assigned to this partner.",
+    gastoParceiro:"Partner cost", gastoEscola:"School-specific cost",
+    semCustos:"No costs registered.",
     perfilAdmin:"Administrator", perfilFinanceiro:"Finance", perfilComprador:"Buyer",
     salvar:"Save", cancelar:"Cancel", editar:"Edit", excluir:"Delete", voltar:"Back",
     buscar:"Search", nenhumResultado:"Nothing found",
@@ -432,6 +452,7 @@ function menuDoPerfil(){
   itens.push({ chave:"pedidos", texto:t("pedidos") });
   if (p === "admin"){
     itens.push({ chave:"simulacao", texto:t("simulacao") });
+    itens.push({ chave:"kits", texto:t("kits") });
     itens.push({ chave:"parceiros", texto:t("parceiros") });
     itens.push({ chave:"usuarios", texto:t("usuarios") });
   }
@@ -451,6 +472,7 @@ const TELAS = {
   escolas: telaEscolas,
   escolaForm: telaEscolaForm,
   simulacao: telaSimulacao,
+  kits: telaKits,
   parceiros: telaParceiros,
   usuarios: telaUsuarios,
   pedidos: telaPedidos,
@@ -608,11 +630,36 @@ function barraCapacidade(e){
 
 const STATUS_ESCOLA = ["Em andamento","Suspenso","Cancelado","Finalizado"];
 
-/* Mesma tabela de kits do backend: KIT 1 = 1.740 e cada AP a mais soma 610. */
+/* A tabela de kits vem do banco (o admin edita na tela de Kits).
+   Se ainda nao foi carregada, cai no calculo classico: 1.740 + 610 por AP. */
 const VALOR_KIT_1 = 1740, VALOR_AP_ADICIONAL = 610;
+
+async function carregarKits(recarregar){
+  if (!estado.kits || recarregar){
+    try{ estado.kits = await api("kits.listar", {}); }
+    catch(e){ estado.kits = { kits:[], apAdicional:VALOR_AP_ADICIONAL }; }
+  }
+  return estado.kits;
+}
+
 function receitaPorAps(aps){
-  const n = Number(aps) || 0;
-  return n <= 0 ? 0 : Math.round((VALOR_KIT_1 + VALOR_AP_ADICIONAL*(n-1))*100)/100;
+  const n = Math.trunc(Number(aps) || 0);
+  if (n <= 0) return 0;
+  const tabela = estado.kits;
+  const adicional = tabela ? Number(tabela.apAdicional)||0 : VALOR_AP_ADICIONAL;
+  const linhas = tabela ? [...tabela.kits].sort((x,y)=>x.aps-y.aps) : [];
+  if (linhas.length === 0) return Math.round((VALOR_KIT_1 + adicional*(n-1))*100)/100;
+
+  const exato = linhas.find(k=>Number(k.aps)===n);
+  if (exato) return Math.round(Math.max(0, Number(exato.valor))*100)/100;
+
+  const menores = linhas.filter(k=>Number(k.aps)<n);
+  if (menores.length === 0){
+    const primeiro = linhas[0];
+    return Math.round(Math.max(0, Number(primeiro.valor) - adicional*(Number(primeiro.aps)-n))*100)/100;
+  }
+  const base = menores[menores.length-1];
+  return Math.round(Math.max(0, Number(base.valor) + adicional*(n-Number(base.aps)))*100)/100;
 }
 function seloEscola(status){
   const cor = { "Em andamento":"azul", "Suspenso":"ambar", "Cancelado":"vermelho", "Finalizado":"verde" }[status] || "cinza";
@@ -705,7 +752,7 @@ async function telaEscolas(alvo){
     id("fBusca").addEventListener("keydown", e=>{ if(e.key==="Enter") irPara("escolas",{busca:e.target.value}); });
     if (admin){
       id("btNova").onclick = ()=>irPara("escolaForm", {});
-      id("btKits").onclick = ()=>modalKits(r.kits);
+      id("btKits").onclick = ()=>irPara("kits");
       alvo.querySelectorAll("[data-editar]").forEach(b=> b.onclick = ()=>{
         const escola = r.escolas.find(x=>x.id===b.dataset.editar);
         irPara("escolaForm", { escola });
@@ -719,19 +766,84 @@ async function telaEscolas(alvo){
   }catch(e){ alvo.innerHTML = `<div class="aviso perigo">${esc(e.message)}</div>`; }
 }
 
-function modalKits(kits){
-  abrirModal(t("tabelaKits"), `
-    <div class="tabela-rolagem"><table>
-      <thead><tr><th>${t("kit")}</th><th class="num">${t("apsInst")}</th><th class="num">${t("valor")}</th></tr></thead>
-      <tbody>${kits.map(k=>`<tr><td class="mono">${esc(k.kit)}</td>
-        <td class="num mono">${k.aps ?? "+1"}</td>
-        <td class="num mono">${dinheiro(k.valor)}</td></tr>`).join("")}</tbody>
-    </table></div>
-    <p style="color:var(--texto-2);margin-top:12px">
-      ${idioma==="pt-BR"
-        ? "O valor a receber e calculado pelos APs instalados. Acima de 15 APs, cada AP adicional soma R$ 610,00."
-        : "Revenue follows the installed APs. Above 15 APs each extra AP adds R$ 610.00."}
-    </p>`, []);
+/* ===================================================================
+   11c. TELA — TABELA DE KITS (admin)
+   Estes valores sao a receita do contrato: mexer aqui muda tudo.
+   =================================================================== */
+async function telaKits(alvo){
+  carregando(alvo);
+  const tabela = await carregarKits(true);
+  const linhas = [...tabela.kits].sort((a,b)=>a.aps-b.aps)
+    .map(k=>({ aps:Number(k.aps), valor:Number(k.valor) }));
+  let adicional = Number(tabela.apAdicional)||0;
+
+  alvo.innerHTML = `
+    <div class="cabeca">
+      <div><h1>${t("tabelaKits")}</h1><p>${t("kitsAviso")}</p></div>
+      <div class="barra-acoes">
+        <button class="btn" id="btSalvarKits">${t("salvar")}</button>
+      </div>
+    </div>
+
+    <div class="grade g2" style="align-items:start">
+      <div class="cartao">
+        <div class="tabela-rolagem"><table>
+          <thead><tr><th>${t("kit")}</th><th class="num">${t("aps")}</th>
+            <th class="num">${t("valor")}</th><th style="width:44px"></th></tr></thead>
+          <tbody id="kitsCorpo"></tbody>
+        </table></div>
+        <div class="cartao-pad" style="border-top:1px solid var(--linha)">
+          <button class="btn neutro pequeno" id="btAddKit">+ ${t("adicionarKit")}</button>
+        </div>
+      </div>
+
+      <div class="cartao cartao-pad">
+        <div class="campo"><label for="kAdicional">${t("apAdicional")}</label>
+          <input id="kAdicional" class="num" inputmode="numeric" value="${dinheiro(adicional)}">
+          <small style="color:var(--texto-3)">${t("apAdicionalNota")}</small></div>
+        <div class="aviso info">${t("kitsAviso")}</div>
+      </div>
+    </div>`;
+
+  function montar(){
+    const corpo = id("kitsCorpo");
+    corpo.innerHTML = linhas.map((k,i)=>`
+      <tr>
+        <td class="mono">KIT ${i+1}</td>
+        <td class="num"><input type="number" min="1" class="num" style="width:78px;text-align:right"
+          value="${k.aps}" data-aps="${i}"></td>
+        <td class="num"><input class="num" inputmode="numeric" style="width:130px;text-align:right"
+          value="${dinheiro(k.valor)}" data-valor="${i}"></td>
+        <td><button class="btn neutro pequeno" data-remover="${i}">×</button></td>
+      </tr>`).join("");
+
+    corpo.querySelectorAll("[data-aps]").forEach(inp=> inp.addEventListener("input", ()=>{
+      linhas[Number(inp.dataset.aps)].aps = Math.max(1, Math.trunc(Number(inp.value)||1));
+    }));
+    corpo.querySelectorAll("[data-valor]").forEach(inp=> inp.addEventListener("input", ()=>{
+      linhas[Number(inp.dataset.valor)].valor = formatarMoeda(inp);
+    }));
+    corpo.querySelectorAll("[data-remover]").forEach(bt=> bt.onclick = ()=>{
+      linhas.splice(Number(bt.dataset.remover), 1); montar();
+    });
+  }
+
+  id("btAddKit").onclick = ()=>{
+    const proximo = linhas.length ? Math.max(...linhas.map(k=>k.aps))+1 : 1;
+    linhas.push({ aps:proximo, valor:0 });
+    montar();
+  };
+  id("kAdicional").addEventListener("input", ()=>{ adicional = formatarMoeda(id("kAdicional")); });
+  id("btSalvarKits").onclick = async ()=>{
+    try{
+      await api("kits.salvar", { kits: linhas, apAdicional: adicional });
+      await carregarKits(true);
+      torrada(t("salvo"), "ok");
+      desenhar();
+    }catch(e){ torrada(e.message, "erro"); }
+  };
+
+  montar();
 }
 
 /* ===================================================================
@@ -739,6 +851,7 @@ function modalKits(kits){
    =================================================================== */
 async function telaEscolaForm(alvo){
   carregando(alvo);
+  await carregarKits();
   const e = estado.dados.escola || {};
   const editando = !!e.id;
 
@@ -778,7 +891,8 @@ async function telaEscolaForm(alvo){
           <select id="cMisc">
             <option value="nos" ${e.miscelaneosPor==="parceiro"?"":"selected"}>${t("miscelaneosNos")}</option>
             <option value="parceiro" ${e.miscelaneosPor==="parceiro"?"selected":""}>${t("miscelaneosParceiro")}</option>
-          </select></div>
+          </select>
+          <small style="color:var(--texto-3)" id="cMiscNota"></small></div>
         <div class="campo"><label for="cAtivo">${t("ativo")}</label>
           <select id="cAtivo"><option value="1" ${e.ativo===false?"":"selected"}>${t("ativo")}</option>
           <option value="0" ${e.ativo===false?"selected":""}>${t("inativo")}</option></select></div>
@@ -794,12 +908,37 @@ async function telaEscolaForm(alvo){
     const aps = numVal("cApsInst");
     const receita = receitaPorAps(aps);
     const limite = receita * numVal("cPercentual")/100;
-    const inst = moedaVal("cValorAp")*aps + moedaVal("cValorRack")*numVal("cRacks");
+    const racks = numVal("cRacks");
+    const escolhido = parceiros.find(x=>x.id===val("cParceiro"));
+    const doParceiro = (escolhido && escolhido.custos ? escolhido.custos : []).reduce((soma,c)=>{
+      const q = c.tipo==="ap" ? aps : c.tipo==="rack" ? racks : 1;
+      return soma + (Number(c.valor)||0)*q;
+    }, 0);
+    const daEscola = moedaVal("cValorAp")*aps + moedaVal("cValorRack")*racks;
+    const inst = daEscola + doParceiro;
     id("previa").innerHTML = `<b>${t("receita")}:</b> ${dinheiro(receita)} &nbsp;·&nbsp;
       <b>${t("limite")}:</b> ${dinheiro(limite)} &nbsp;·&nbsp;
-      <b>${t("gastoInstalacao")}:</b> ${dinheiro(inst)} &nbsp;·&nbsp;
+      <b>${t("gastoParceiro")}:</b> ${dinheiro(doParceiro)} &nbsp;·&nbsp;
+      <b>${t("gastoEscola")}:</b> ${dinheiro(daEscola)} &nbsp;·&nbsp;
       <b>${idioma==="pt-BR"?"Sobra para miscelaneos":"Left for miscellaneous"}:</b> ${dinheiro(limite-inst)}`;
   };
+  // Quem compra miscelaneos vem do cadastro do parceiro.
+  function seguirParceiro(){
+    const escolhido = parceiros.find(x=>x.id===val("cParceiro"));
+    const campo = id("cMisc");
+    if (escolhido){
+      campo.value = escolhido.compraMiscelaneos ? "parceiro" : "nos";
+      campo.disabled = true;
+      id("cMiscNota").textContent = `${t("parceiro")}: ${escolhido.nome}`;
+    } else {
+      campo.disabled = false;
+      id("cMiscNota").textContent = "";
+    }
+    previa();
+  }
+  id("cParceiro").addEventListener("change", seguirParceiro);
+  seguirParceiro();
+
   ["cValorAp","cValorRack"].forEach(c=> id(c).addEventListener("input", ()=>{ formatarMoeda(id(c)); previa(); }));
   ["cApsInst","cPercentual","cRacks"].forEach(c=> id(c).addEventListener("input", previa));
   previa();
@@ -828,6 +967,7 @@ async function telaEscolaForm(alvo){
 async function telaSimulacao(alvo){
   carregando(alvo);
   let escolas = [];
+  await carregarKits();
   try{
     escolas = (await api("escolas.listar", {})).escolas.filter(e=>e.ativo);
   }catch(e){ alvo.innerHTML = `<div class="aviso perigo">${esc(e.message)}</div>`; return; }
@@ -844,7 +984,12 @@ async function telaSimulacao(alvo){
     const linhas = escolas.map(e=>{
       const aps = apsDe(e);
       const r = receitaPorAps(aps);
-      const inst = (Number(e.valorPorAp)||0)*aps + (Number(e.valorPorRack)||0)*(Number(e.qtdRacks)||0);
+      const racks = Number(e.qtdRacks)||0;
+      const doParceiro = (e.detalheParceiro||[]).reduce((soma,c)=>{
+        const q = c.tipo==="ap" ? aps : c.tipo==="rack" ? racks : 1;
+        return soma + (Number(c.valor)||0)*q;
+      }, 0);
+      const inst = (Number(e.valorPorAp)||0)*aps + (Number(e.valorPorRack)||0)*racks + doParceiro;
       const g = inst + (Number(e.gastoPedidos)||0);
       const dentro = sim.selecionadas.includes(e.id);
       if (dentro){ receita += r; gastos += g; }
@@ -982,7 +1127,9 @@ async function telaParceiros(alvo){
           <td class="mono">${esc(x.documento||"—")}</td>
           <td>${esc(x.contato||"—")}<br><small style="color:var(--texto-2)">${esc(x.email||"")} ${esc(x.telefone||"")}</small></td>
           <td class="num mono">${numero(x.escolas)}</td>
-          <td>${x.ativo?`<span class="selo verde">${t("ativo")}</span>`:`<span class="selo cinza">${t("inativo")}</span>`}</td>
+          <td>${x.ativo?`<span class="selo verde">${t("ativo")}</span>`:`<span class="selo cinza">${t("inativo")}</span>`}
+              ${x.compraMiscelaneos?`<br><span class="selo cinza">${t("miscelaneosParceiro")}</span>`:""}
+              ${(x.custos||[]).length?`<br><small style="color:var(--texto-2)">${x.custos.length} ${t("custosParceiro").toLowerCase()}</small>`:""}</td>
           <td><div class="barra-acoes">
             <button class="btn neutro pequeno" data-editar="${x.id}">${t("editar")}</button>
             <button class="btn neutro pequeno" data-excluir="${x.id}">${t("excluir")}</button>
@@ -1001,6 +1148,11 @@ async function telaParceiros(alvo){
 
 function modalParceiro(x){
   const novo = !x;
+  const custos = (x && Array.isArray(x.custos) ? x.custos : []).map(c=>({
+    descricao:c.descricao, tipo:c.tipo, valor:Number(c.valor)||0
+  }));
+  const TIPOS = [["ap",t("tipoAp")],["kit",t("tipoKit")],["rack",t("tipoRack")],["fixo",t("tipoFixo")]];
+
   abrirModal(novo ? t("novoParceiro") : t("editar"), `
     <div class="campo"><label for="paNome">${t("nome")} *</label><input id="paNome" value="${esc(x?x.nome:"")}"></div>
     <div class="grade g2">
@@ -1009,6 +1161,18 @@ function modalParceiro(x){
       <div class="campo"><label for="paEmail">${t("email")}</label><input id="paEmail" type="email" value="${esc(x?x.email:"")}"></div>
       <div class="campo"><label for="paTel">${t("telefone")}</label><input id="paTel" class="num" value="${esc(x?x.telefone:"")}"></div>
     </div>
+
+    <div class="escolha" style="margin-bottom:14px">
+      <input type="checkbox" id="paMisc" ${x && x.compraMiscelaneos ? "checked":""}>
+      <div class="info"><b><label for="paMisc" style="margin:0;color:var(--texto);font-size:13.5px">${t("compraMiscelaneos")}</label></b>
+        <small style="color:var(--texto-2)">${t("compraMiscelaneosNota")}</small></div>
+    </div>
+
+    <h3 style="margin-bottom:4px">${t("custosParceiro")}</h3>
+    <p style="color:var(--texto-2);font-size:12.5px;margin:0 0 10px">${t("custosNota")}</p>
+    <div id="paCustos"></div>
+    <button class="btn neutro pequeno" id="btAddCusto" style="margin-bottom:14px">+ ${t("adicionarCusto")}</button>
+
     <div class="campo"><label for="paObs">${t("observacao")}</label><textarea id="paObs">${esc(x?x.observacao:"")}</textarea></div>
     ${novo?"":`<div class="campo"><label for="paAtivo">${t("status")}</label>
       <select id="paAtivo"><option value="1" ${x.ativo?"selected":""}>${t("ativo")}</option>
@@ -1018,11 +1182,43 @@ function modalParceiro(x){
         await api("parceiros.salvar", {
           id: x?x.id:"", nome: val("paNome"), documento: val("paDoc"), contato: val("paContato"),
           email: val("paEmail"), telefone: val("paTel"), observacao: val("paObs"),
+          compraMiscelaneos: id("paMisc").checked, custos,
           ativo: novo ? true : val("paAtivo")==="1",
         });
         fecharModal(); torrada(t("salvo"),"ok"); desenhar();
       }catch(e){ torrada(e.message,"erro"); }
     }}]);
+
+  function montarCustos(){
+    const cont = id("paCustos");
+    if (custos.length === 0){
+      cont.innerHTML = `<p style="color:var(--texto-3);font-size:12.5px;margin:0 0 10px">${t("semCustos")}</p>`;
+      return;
+    }
+    cont.innerHTML = custos.map((c,i)=>`
+      <div style="display:grid;grid-template-columns:1fr 140px 130px 34px;gap:7px;margin-bottom:7px;align-items:center">
+        <input value="${esc(c.descricao)}" placeholder="${t("descricao")}" data-cd="${i}">
+        <select data-ct="${i}">${TIPOS.map(([v,rot])=>`<option value="${v}" ${c.tipo===v?"selected":""}>${rot}</option>`).join("")}</select>
+        <input class="num" inputmode="numeric" value="${dinheiro(c.valor)}" data-cv="${i}">
+        <button class="btn neutro pequeno" data-cx="${i}">×</button>
+      </div>`).join("");
+
+    cont.querySelectorAll("[data-cd]").forEach(inp=> inp.addEventListener("input", ()=>{
+      custos[Number(inp.dataset.cd)].descricao = inp.value;
+    }));
+    cont.querySelectorAll("[data-ct]").forEach(sel=> sel.addEventListener("change", ()=>{
+      custos[Number(sel.dataset.ct)].tipo = sel.value;
+    }));
+    cont.querySelectorAll("[data-cv]").forEach(inp=> inp.addEventListener("input", ()=>{
+      custos[Number(inp.dataset.cv)].valor = formatarMoeda(inp);
+    }));
+    cont.querySelectorAll("[data-cx]").forEach(bt=> bt.onclick = ()=>{
+      custos.splice(Number(bt.dataset.cx), 1); montarCustos();
+    });
+  }
+
+  id("btAddCusto").onclick = ()=>{ custos.push({descricao:"",tipo:"fixo",valor:0}); montarCustos(); };
+  montarCustos();
 }
 
 /* ===================================================================
