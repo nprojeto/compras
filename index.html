@@ -77,11 +77,6 @@ details.dobra summary h3{font-size:15px}
 details.dobra summary .seta{font-family:"IBM Plex Mono",monospace;color:var(--texto-3);font-size:12px}
 details.dobra[open] summary .seta{transform:rotate(90deg)}
 details.dobra summary .seta{display:inline-block;transition:transform .15s ease}
-.abas{display:inline-flex;background:var(--linha-2);border:1px solid var(--linha);border-radius:10px;padding:3px;gap:3px}
-.abas .aba{border:0;background:transparent;color:var(--texto-2);font-size:13.5px;font-weight:600;
-  padding:8px 18px;border-radius:8px;cursor:pointer}
-.abas .aba:hover{color:var(--texto)}
-.abas .aba.ativa{background:var(--branco);color:var(--sinal);box-shadow:0 1px 2px rgba(16,28,46,.12)}
 .cabeca p{margin:4px 0 0;color:var(--texto-2)}
 @media(max-width:820px){
   .app{grid-template-columns:1fr}
@@ -148,6 +143,12 @@ td.num,th.num{text-align:right}
 .selo.ambar{background:var(--alerta-claro);color:var(--alerta)}
 .selo.vermelho{background:var(--perigo-claro);color:var(--perigo)}
 .selo.cinza{background:var(--linha-2);color:var(--texto-2)}
+.selo.roxo{background:#EFE9FB;color:#5B3FA8}
+.anexo{border:1px solid var(--linha);border-radius:10px;padding:13px;margin-bottom:10px}
+.anexo.vazio-arq{border-style:dashed;background:var(--linha-2)}
+.anexo .titulo{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px}
+.anexo .titulo h4{font-family:"Archivo",sans-serif;font-size:13.5px}
+.anexo .arquivo{font-family:"IBM Plex Mono",monospace;font-size:12.5px;word-break:break-all}
 
 /* ---------- ASSINATURA: barra de capacidade do INEP ---------- */
 .capacidade{margin-top:6px}
@@ -326,6 +327,16 @@ const IDIOMAS = {
     enviarFinanceiro:"Enviar ao financeiro", reenviar:"Reenviar ao financeiro",
     pagar:"Aprovar e pagar", espera:"Deixar em espera", recusar:"Recusar",
     stENVIADO:"Aguardando financeiro", stEM_ESPERA:"Em espera", stRECUSADO:"Recusado", stPAGO:"Pago",
+    stEM_ANDAMENTO:"Em andamento", stANEXOU_NF:"Anexou a NF", stANEXOU_COMPROVANTE:"Anexou o comprovante",
+    stREMOVEU_ANEXO:"Removeu anexo",
+    documentos:"Documentos", anexoNf:"Nota fiscal", anexoComprovante:"Comprovante de pagamento",
+    anexoNfQuem:"Anexada pelo comprador", anexoComprovanteQuem:"Anexado pelo financeiro",
+    anexar:"Anexar arquivo", trocarArquivo:"Trocar arquivo", baixar:"Baixar", removerAnexo:"Remover",
+    semAnexo:"Ainda sem arquivo", enviandoArquivo:"Enviando...",
+    arquivoGrande:"O arquivo passa de 5 MB. Reduza antes de anexar.",
+    faltaDocumento:"Falta anexar:", pedidoAguardaDoc:"Aprovado, mas so vira pago quando os dois documentos estiverem no sistema.",
+    docsCompletos:"Nota fiscal e comprovante no sistema.",
+    removerAnexoConfirma:"Remover este arquivo?",
     historico:"Historico", comprador:"Comprador", numero:"Pedido", criadoEm:"Criado em",
     semPedidos:"Nenhum pedido por aqui ainda.", semEscolas:"Nenhuma escola cadastrada ainda.",
     semEscolasDisponiveis:"Nenhum INEP disponivel: as escolas ativas estao com miscelaneos por conta do parceiro.",
@@ -442,6 +453,16 @@ const IDIOMAS = {
     enviarFinanceiro:"Send to finance", reenviar:"Resend to finance",
     pagar:"Approve and pay", espera:"Put on hold", recusar:"Reject",
     stENVIADO:"Waiting on finance", stEM_ESPERA:"On hold", stRECUSADO:"Rejected", stPAGO:"Paid",
+    stEM_ANDAMENTO:"In progress", stANEXOU_NF:"Attached the invoice", stANEXOU_COMPROVANTE:"Attached the receipt",
+    stREMOVEU_ANEXO:"Removed attachment",
+    documentos:"Documents", anexoNf:"Invoice", anexoComprovante:"Payment receipt",
+    anexoNfQuem:"Attached by the buyer", anexoComprovanteQuem:"Attached by finance",
+    anexar:"Attach file", trocarArquivo:"Replace file", baixar:"Download", removerAnexo:"Remove",
+    semAnexo:"No file yet", enviandoArquivo:"Uploading...",
+    arquivoGrande:"File is over 5 MB. Shrink it before attaching.",
+    faltaDocumento:"Still missing:", pedidoAguardaDoc:"Approved, but it only turns paid once both documents are in the system.",
+    docsCompletos:"Invoice and receipt are in the system.",
+    removerAnexoConfirma:"Remove this file?",
     historico:"History", comprador:"Buyer", numero:"Order", criadoEm:"Created",
     semPedidos:"No orders here yet.", semEscolas:"No schools registered yet.",
     semEscolasDisponiveis:"No INEP available: every active school has miscellaneous bought by the partner.",
@@ -502,6 +523,23 @@ function moedaVal(x){ const e = id(x); return e ? deMoeda(e.value) : 0; }
 
 /* Aviso de erro NAO some sozinho: fica ate o clique, para dar tempo de ler
    e copiar a mensagem. Aviso de sucesso continua sumindo em 5 segundos. */
+/* Le o arquivo escolhido e devolve so a parte base64, que e o que o
+   backend espera dentro do corpo da requisicao. */
+function lerArquivo(arquivo){
+  return new Promise((resolver, recusar)=>{
+    const leitor = new FileReader();
+    leitor.onload = ()=> resolver(String(leitor.result).split(",")[1] || "");
+    leitor.onerror = ()=> recusar(new Error("Nao consegui ler o arquivo."));
+    leitor.readAsDataURL(arquivo);
+  });
+}
+function tamanhoLegivel(bytes){
+  const n = Number(bytes)||0;
+  if (n < 1024) return n + " B";
+  if (n < 1024*1024) return (n/1024).toFixed(0) + " KB";
+  return (n/1024/1024).toFixed(1) + " MB";
+}
+
 function torrada(texto, tipo, codigo){
   const d=document.createElement("div");
   d.className="torrada "+(tipo||"");
@@ -579,7 +617,7 @@ const TELAS = {
   escolas: telaEscolas,
   escolaForm: telaEscolaForm,
   escolaDetalhe: telaEscolaDetalhe,
-  simulacao: telaPainel,          // rota antiga cai no painel, aba de simulacao
+  simulacao: telaPainel,          // rota antiga: cai no painel
   kits: telaKits,
   parceiros: telaParceiros,
   usuarios: telaUsuarios,
@@ -791,7 +829,7 @@ function seloEscola(status){
 }
 
 function seloStatus(status){
-  const cor = { ENVIADO:"azul", EM_ESPERA:"ambar", RECUSADO:"vermelho", PAGO:"verde" }[status] || "cinza";
+  const cor = { ENVIADO:"azul", EM_ANDAMENTO:"roxo", EM_ESPERA:"ambar", RECUSADO:"vermelho", PAGO:"verde" }[status] || "cinza";
   return `<span class="selo ${cor}">${t("st"+status)}</span>`;
 }
 
@@ -815,28 +853,18 @@ async function telaPainel(alvo){
 
   const kits = estado.kits || {};
   const percentualGasto = Number(kits.percentualGasto)||0;
+  const percentualImposto = Number(kits.percentualImposto)||0;
+  const percentualSocio = Number(kits.percentualSocio)||0;
 
-  if (!estado.painel) estado.painel = {
-    aba:"real", busca:"", status:"", parceiro:"", selReal:null,
-    sim:{ imposto:Number(kits.percentualImposto)||0, socio:Number(kits.percentualSocio)||0, aps:{}, selecionadas:null },
-  };
+  if (!estado.painel) estado.painel = { busca:"", status:"", parceiro:"", selecionadas:null, kitsAberto:false };
   const f = estado.painel;
-  const sim = f.sim;
 
-  // Cada aba guarda a propria marcacao: filtrar na simulacao nao mexe no real.
   const todos = escolas.map(e=>e.id);
-  sim.selecionadas = sim.selecionadas === null ? todos.slice() : sim.selecionadas.filter(x=>todos.includes(x));
-  f.selReal = f.selReal === null ? todos.slice() : f.selReal.filter(x=>todos.includes(x));
-
-  const marcadas = ()=> f.aba === "simulacao" ? sim.selecionadas : f.selReal;
-  function definirMarcadas(lista){
-    if (f.aba === "simulacao") sim.selecionadas = lista; else f.selReal = lista;
-  }
+  f.selecionadas = f.selecionadas === null ? todos.slice() : f.selecionadas.filter(x=>todos.includes(x));
 
   const parceirosDaLista = [...new Set(escolas.map(e=>e.nomeParceiro).filter(Boolean))].sort();
-  const apsDe = (e)=> sim.aps[e.id] !== undefined ? sim.aps[e.id] : (Number(e.apsBase)||0);
 
-  // O filtro define o recorte de TODO o calculo, nas duas abas.
+  // O filtro define o recorte; a caixa de selecao refina dentro dele.
   function visiveis(){
     const busca = (f.busca||"").toLowerCase();
     return escolas.filter(e=>{
@@ -848,108 +876,42 @@ async function telaPainel(alvo){
     });
   }
 
-  /* Cadeia de resultado, igual nas duas abas:
-     imposto sobre o recebido; socio sobre (recebido - gastos - imposto). */
-  function fechar(linhas, imposto, socio){
-    const receita = linhas.reduce((s,l)=> s + l.receita, 0);
-    const gastos = linhas.reduce((s,l)=> s + l.gastos, 0);
-    const valorImposto = receita * (Number(imposto)||0) / 100;
-    const baseSocio = receita - gastos - valorImposto;
-    const valorSocio = Math.max(0, baseSocio) * (Number(socio)||0) / 100;
-    const custoTotal = gastos + valorImposto + valorSocio;
-    const lucro = receita - custoTotal;
-    const limite = linhas.reduce((s,l)=> s + l.limite, 0);
-    return {
-      linhas, receita, gastos, imposto:valorImposto, baseSocio, socio:valorSocio,
-      custoTotal, lucro, limite,
-      saldo: limite - gastos,
-      estouradas: linhas.filter(l=> l.limite > 0 && l.gastos > l.limite).length,
-      aps: linhas.reduce((s,l)=> s + l.aps, 0),
-      margem: custoTotal > 0 ? receita/custoTotal : 0,
-      margemLiquida: receita > 0 ? lucro/receita*100 : 0,
-    };
-  }
-
-  // Aba Real: exatamente o que esta cadastrado, contando so AP instalado.
-  function linhasReais(){
+  function linhas(){
     return visiveis().map(e=>({
       e,
       aps: Number(e.qtdApsInst)||0,
       receita: Number(e.receitaReal)||0,
       gastos: Number(e.gastoTotalReal)||0,
       limite: Number(e.limiteReal)||0,
-      dentro: f.selReal.includes(e.id),
+      dentro: f.selecionadas.includes(e.id),
     }));
   }
 
-  // Aba Simulacao: APs que voce digitou e marcacao linha a linha.
-  function linhasSimuladas(){
-    return visiveis().map(e=>{
-      const aps = apsDe(e);
-      const racks = Number(e.qtdRacks)||0;
-      const receita = receitaPorAps(aps);
-      const doParceiro = (e.detalheParceiro||[]).reduce((soma,c)=>{
-        const q = c.tipo==="ap" ? aps : c.tipo==="rack" ? racks : 1;
-        return soma + (Number(c.valor)||0)*q;
-      }, 0);
-      return {
-        e, aps, receita,
-        gastos: doParceiro + (Number(e.gastoPedidos)||0),
-        limite: receita * percentualGasto / 100,
-        dentro: sim.selecionadas.includes(e.id),
-      };
-    });
-  }
-
-  function cartoesLucro(c, imposto, socio){
-    return `
-      <div class="indicador"><div class="rotulo">${t("totalRecebido")}</div>
-        <div class="valor">${dinheiro(c.receita)}</div></div>
-      <div class="indicador"><div class="rotulo">${t("totalImpostos")}</div>
-        <div class="valor">${dinheiro(c.imposto)}</div>
-        <div class="nota">${numero(imposto,2)}% ${idioma==="pt-BR"?"do recebido":"of revenue"}</div></div>
-      <div class="indicador"><div class="rotulo">${t("totalGastos")}</div>
-        <div class="valor">${dinheiro(c.gastos)}</div></div>
-      <div class="indicador"><div class="rotulo">${t("baseSocio")}</div>
-        <div class="valor">${dinheiro(c.baseSocio)}</div>
-        <div class="nota">${t("baseSocioNota")}</div></div>
-      <div class="indicador"><div class="rotulo">${t("valorSocio")}</div>
-        <div class="valor">${dinheiro(c.socio)}</div>
-        <div class="nota">${numero(socio,2)}% ${idioma==="pt-BR"?"sobre a base":"of the base"}</div></div>
-      <div class="indicador"><div class="rotulo">${t("custoTotal")}</div>
-        <div class="valor">${dinheiro(c.custoTotal)}</div></div>
-      <div class="indicador ${c.lucro<0?"perigo":"ok"}"><div class="rotulo">${t("lucro")}</div>
-        <div class="valor">${dinheiro(c.lucro)}</div>
-        <div class="nota">${t("margemLiquida")}: ${numero(c.margemLiquida,1)}%</div></div>
-      <div class="indicador ${c.margem<1?"perigo":"ok"}"><div class="rotulo">${t("margem")}</div>
-        <div class="valor">${c.custoTotal>0 ? numero(c.margem,2)+"x" : "—"}</div></div>`;
-  }
-
-  function cartoesVerba(c, lista){
-    return `
-      <div class="indicador"><div class="rotulo">${t("escolasAtivas")}</div>
-        <div class="valor">${numero(lista.length)}</div>
-        <div class="nota">${numero(escolas.length)} ${idioma==="pt-BR"?"no total":"in total"}</div></div>
-      <div class="indicador"><div class="rotulo">${f.aba==="real"?t("apsInstalados"):t("apsSimulados")}</div>
-        <div class="valor">${numero(c.aps)}</div>
-        <div class="nota">${numero(lista.reduce((a,l)=>a+(Number(l.e.qtdApsPrev)||0),0))} ${t("apsPrev").toLowerCase()}</div></div>
-      <div class="indicador"><div class="rotulo">${t("limite")}</div>
-        <div class="valor">${dinheiro(c.limite)}</div>
-        <div class="nota">${numero(percentualGasto,2)}% ${t("padraoKits")}</div></div>
-      <div class="indicador ${c.saldo<0?"perigo":"ok"}"><div class="rotulo">${t("saldo")}</div>
-        <div class="valor">${dinheiro(c.saldo)}</div>
-        <div class="nota">${numero(c.estouradas)} ${t("estouradas").toLowerCase()}</div></div>`;
+  /* Cadeia de resultado: imposto sobre o recebido;
+     socio sobre (recebido - gastos - imposto); o resto e a margem Novale. */
+  function fechar(lista){
+    const receita = lista.reduce((s,l)=> s + l.receita, 0);
+    const gastos = lista.reduce((s,l)=> s + l.gastos, 0);
+    const imposto = receita * percentualImposto / 100;
+    const baseSocio = receita - gastos - imposto;
+    const socio = Math.max(0, baseSocio) * percentualSocio / 100;
+    const custoTotal = gastos + imposto + socio;
+    const lucro = receita - custoTotal;
+    const limite = lista.reduce((s,l)=> s + l.limite, 0);
+    return {
+      receita, gastos, imposto, baseSocio, socio, custoTotal, lucro, limite,
+      saldo: limite - gastos,
+      estouradas: lista.filter(l=> l.limite > 0 && l.gastos > l.limite).length,
+      aps: lista.reduce((s,l)=> s + l.aps, 0),
+      margem: custoTotal > 0 ? receita/custoTotal : 0,
+      margemLiquida: receita > 0 ? lucro/receita*100 : 0,
+    };
   }
 
   // -------------------------------------------------------------- esqueleto
   alvo.innerHTML = `
     <div class="cabeca">
-      <div><h1>${t("painel")}</h1>
-        <p>${!admin ? t("resumoFinanceiro") : (f.aba==="real" ? t("visaoRealNota") : t("notaSimulacao"))}</p></div>
-      ${admin?`<div class="abas">
-        <button class="aba ${f.aba==="real"?"ativa":""}" id="btAbaReal">${t("visaoReal")}</button>
-        <button class="aba ${f.aba==="simulacao"?"ativa":""}" id="btAbaSim">${t("simulacao")}</button>
-      </div>`:""}
+      <div><h1>${t("painel")}</h1><p>${t("visaoRealNota")}</p></div>
     </div>
 
     <div class="cartao cartao-pad" style="margin-bottom:16px">
@@ -972,22 +934,17 @@ async function telaPainel(alvo){
       ${admin?`
       <hr style="border:0;border-top:1px solid var(--linha);margin:14px 0">
       <div class="grade g4">
-        ${f.aba==="simulacao"?`
-        <div class="campo" style="margin:0"><label for="sImposto">${t("imposto")}</label>
-          <input id="sImposto" type="number" step="0.01" min="0" max="100" class="num" value="${sim.imposto}"></div>
-        <div class="campo" style="margin:0"><label for="sSocio">${t("socio")}</label>
-          <input id="sSocio" type="number" step="0.01" min="0" max="100" class="num" value="${sim.socio}"></div>`:`
         <div class="campo" style="margin:0"><label>${t("imposto")}</label>
-          <input class="num" value="${numero(kits.percentualImposto||0,2)}" disabled></div>
+          <input class="num" value="${numero(percentualImposto,2)}" disabled></div>
         <div class="campo" style="margin:0"><label>${t("socio")}</label>
-          <input class="num" value="${numero(kits.percentualSocio||0,2)}" disabled></div>`}
+          <input class="num" value="${numero(percentualSocio,2)}" disabled></div>
         <div class="campo" style="margin:0"><label>&nbsp;</label>
           <div class="barra-acoes">
             <button class="btn neutro pequeno" id="btTodas">${t("marcarVisiveis")}</button>
             <button class="btn neutro pequeno" id="btNenhuma">${t("desmarcarVisiveis")}</button>
           </div></div>
         <div class="campo" style="margin:0"><label>&nbsp;</label>
-          <div class="mono" id="simContagem" style="padding-top:9px;color:var(--texto-2);font-size:12.5px"></div></div>
+          <div class="mono" id="pnMarcadas" style="padding-top:9px;color:var(--texto-2);font-size:12.5px"></div></div>
       </div>`:""}
 
       <div class="barra-acoes" style="margin-top:10px">
@@ -996,10 +953,10 @@ async function telaPainel(alvo){
       </div>
     </div>
 
-    ${(admin && f.aba==="real")?`
+    ${admin?`
     <details class="cartao dobra" style="margin-bottom:16px" id="pnKits" ${f.kitsAberto?"open":""}>
       <summary class="cartao-pad">
-        <span style="display:flex;align-items:center;gap:10px">
+        <span style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
           <span class="seta">▶</span>
           <h3>${t("tabelaKits")}</h3>
           <span class="selo cinza">${numero((kits.kits||[]).length)} ${t("kits").toLowerCase()}</span>
@@ -1025,9 +982,9 @@ async function telaPainel(alvo){
           </div>
           <div class="grade" style="gap:10px">
             <div class="indicador"><div class="rotulo">${t("percentualImposto")}</div>
-              <div class="valor">${numero(kits.percentualImposto||0,2)}%</div></div>
+              <div class="valor">${numero(percentualImposto,2)}%</div></div>
             <div class="indicador"><div class="rotulo">${t("percentualSocio")}</div>
-              <div class="valor">${numero(kits.percentualSocio||0,2)}%</div></div>
+              <div class="valor">${numero(percentualSocio,2)}%</div></div>
             <div class="indicador"><div class="rotulo">${t("margemLucro")}</div>
               <div class="valor">${numero(kits.margemLucro||0,2)}%</div></div>
             <div class="indicador" style="border-color:var(--sinal)"><div class="rotulo">${t("percentualGasto")}</div>
@@ -1040,20 +997,19 @@ async function telaPainel(alvo){
 
     ${admin?`<div class="grade g4" id="pnLucro" style="margin-bottom:16px"></div>`:""}
     <div class="grade g4" id="pnVerba" style="margin-bottom:16px"></div>
-    ${(!admin || f.aba==="real")?`<div class="grade g4" id="pnPedidos" style="margin-bottom:16px"></div>`:""}
-
+    <div class="grade g4" id="pnPedidos" style="margin-bottom:16px"></div>
 
     <div class="cartao tabela-rolagem">
       <table>
         <thead><tr>
           ${admin?`<th style="width:34px"></th>`:""}
           <th>${t("inep")}</th><th>${t("escola")}</th><th>${t("status")}</th>
-          <th class="num">${(admin && f.aba==="simulacao")?t("apsSimulados"):t("aps")}</th>
+          <th class="num">${t("aps")}</th>
           ${admin?`<th class="num">${t("receita")}</th>`:""}
           <th class="num">${t("totalGastos")}</th>
           <th class="num">${t("limite")}</th><th class="num">${t("saldo")}</th>
           ${admin?`<th class="num">${t("lucro")}</th>`:""}
-          ${f.aba==="real"?`<th></th>`:""}
+          <th></th>
         </tr></thead>
         <tbody id="pnCorpo"></tbody>
       </table>
@@ -1061,20 +1017,50 @@ async function telaPainel(alvo){
 
   // -------------------------------------------------------------- pintura
   function pintar(){
-    const simulando = admin && f.aba === "simulacao";
-    const todasLinhas = simulando ? linhasSimuladas() : linhasReais();
+    const todasLinhas = linhas();
     const naConta = todasLinhas.filter(l=>l.dentro);
-    const imposto = simulando ? sim.imposto : (Number(kits.percentualImposto)||0);
-    const socio = simulando ? sim.socio : (Number(kits.percentualSocio)||0);
-    const c = fechar(naConta, imposto, socio);
+    const c = fechar(naConta);
 
     id("pnContagem").textContent = `${todasLinhas.length} / ${escolas.length} ${t("escolasNoRecorte")}`;
-    if (id("simContagem")){
-      id("simContagem").textContent = `${naConta.length} ${t("selecionadas")}`;
-    }
-    if (id("pnLucro")) id("pnLucro").innerHTML = cartoesLucro(c, imposto, socio);
-    id("pnVerba").innerHTML = cartoesVerba(c, naConta);
-    if (id("pnPedidos")) id("pnPedidos").innerHTML = `
+    if (id("pnMarcadas")) id("pnMarcadas").textContent = `${naConta.length} ${t("selecionadas")}`;
+
+    if (id("pnLucro")) id("pnLucro").innerHTML = `
+      <div class="indicador"><div class="rotulo">${t("totalRecebido")}</div>
+        <div class="valor">${dinheiro(c.receita)}</div></div>
+      <div class="indicador"><div class="rotulo">${t("totalImpostos")}</div>
+        <div class="valor">${dinheiro(c.imposto)}</div>
+        <div class="nota">${numero(percentualImposto,2)}% ${idioma==="pt-BR"?"do recebido":"of revenue"}</div></div>
+      <div class="indicador"><div class="rotulo">${t("totalGastos")}</div>
+        <div class="valor">${dinheiro(c.gastos)}</div></div>
+      <div class="indicador"><div class="rotulo">${t("baseSocio")}</div>
+        <div class="valor">${dinheiro(c.baseSocio)}</div>
+        <div class="nota">${t("baseSocioNota")}</div></div>
+      <div class="indicador"><div class="rotulo">${t("valorSocio")}</div>
+        <div class="valor">${dinheiro(c.socio)}</div>
+        <div class="nota">${numero(percentualSocio,2)}% ${idioma==="pt-BR"?"sobre a base":"of the base"}</div></div>
+      <div class="indicador"><div class="rotulo">${t("custoTotal")}</div>
+        <div class="valor">${dinheiro(c.custoTotal)}</div></div>
+      <div class="indicador ${c.lucro<0?"perigo":"ok"}"><div class="rotulo">${t("lucro")}</div>
+        <div class="valor">${dinheiro(c.lucro)}</div>
+        <div class="nota">${t("margemLiquida")}: ${numero(c.margemLiquida,1)}%</div></div>
+      <div class="indicador ${c.margem<1?"perigo":"ok"}"><div class="rotulo">${t("margem")}</div>
+        <div class="valor">${c.custoTotal>0 ? numero(c.margem,2)+"x" : "—"}</div></div>`;
+
+    id("pnVerba").innerHTML = `
+      <div class="indicador"><div class="rotulo">${t("escolasAtivas")}</div>
+        <div class="valor">${numero(naConta.length)}</div>
+        <div class="nota">${numero(escolas.length)} ${idioma==="pt-BR"?"no total":"in total"}</div></div>
+      <div class="indicador"><div class="rotulo">${t("apsInstalados")}</div>
+        <div class="valor">${numero(c.aps)}</div>
+        <div class="nota">${numero(naConta.reduce((a,l)=>a+(Number(l.e.qtdApsPrev)||0),0))} ${t("apsPrev").toLowerCase()}</div></div>
+      <div class="indicador"><div class="rotulo">${t("limite")}</div>
+        <div class="valor">${dinheiro(c.limite)}</div>
+        <div class="nota">${numero(percentualGasto,2)}% ${t("padraoKits")}</div></div>
+      <div class="indicador ${c.saldo<0?"perigo":"ok"}"><div class="rotulo">${t("saldo")}</div>
+        <div class="valor">${dinheiro(c.saldo)}</div>
+        <div class="nota">${numero(c.estouradas)} ${t("estouradas").toLowerCase()}</div></div>`;
+
+    id("pnPedidos").innerHTML = `
       <div class="indicador"><div class="rotulo">${t("aguardando")}</div><div class="valor">${numero(pedidos.ENVIADO||0)}</div></div>
       <div class="indicador"><div class="rotulo">${t("emEspera")}</div><div class="valor">${numero(pedidos.EM_ESPERA||0)}</div></div>
       <div class="indicador"><div class="rotulo">${t("recusados")}</div><div class="valor">${numero(pedidos.RECUSADO||0)}</div></div>
@@ -1094,40 +1080,29 @@ async function telaPainel(alvo){
         <td class="mono">${esc(e.inep)}</td>
         <td><b>${esc(e.escola)}</b><br><small style="color:var(--texto-2)">${esc(e.cidade)}${e.uf?"/"+esc(e.uf):""} · ${esc(e.nomeParceiro||"—")}</small></td>
         <td>${seloEscola(e.status)}</td>
-        <td class="num">${simulando
-          ? `<input type="number" min="0" class="num" style="width:80px;text-align:right" value="${l.aps}" data-aps="${e.id}">`
-          : `<span class="mono">${numero(l.aps)}</span>`}</td>
+        <td class="num mono">${numero(l.aps)} / ${numero(e.qtdApsPrev)}</td>
         ${admin?`<td class="num mono">${dinheiro(l.receita)}</td>`:""}
         <td class="num mono">${dinheiro(l.gastos)}</td>
         <td class="num mono">${dinheiro(l.limite)}</td>
         <td class="num mono" style="color:${l.limite-l.gastos<0?"var(--perigo)":"var(--ok)"}">${dinheiro(l.limite-l.gastos)}</td>
         ${admin?`<td class="num mono" style="color:${lucro<0?"var(--perigo)":"var(--texto)"}">${dinheiro(lucro)}</td>`:""}
-        ${f.aba==="real"?`<td><button class="btn neutro pequeno" data-ver="${e.id}">${t("verEscola")}</button></td>`:""}
+        <td><button class="btn neutro pequeno" data-ver="${e.id}">${t("verEscola")}</button></td>
       </tr>`;
     }).join("");
 
     corpo.querySelectorAll("[data-ver]").forEach(b=> b.onclick = ()=>irPara("escolaDetalhe",{id:b.dataset.ver}));
     corpo.querySelectorAll("[data-sim]").forEach(chk=> chk.onchange = ()=>{
       const eid = chk.dataset.sim;
-      const atual = marcadas();
-      if (chk.checked){ if(!atual.includes(eid)) definirMarcadas([...atual, eid]); }
-      else definirMarcadas(atual.filter(x=>x!==eid));
+      if (chk.checked){ if(!f.selecionadas.includes(eid)) f.selecionadas.push(eid); }
+      else f.selecionadas = f.selecionadas.filter(x=>x!==eid);
       pintar();
     });
-    corpo.querySelectorAll("[data-aps]").forEach(inp=> inp.addEventListener("input", ()=>{
-      sim.aps[inp.dataset.aps] = Math.max(0, Math.trunc(Number(inp.value)||0));
-      pintar();
-    }));
   }
 
   // -------------------------------------------------------------- ligacoes
   if (id("pnKits")){
     id("pnKits").addEventListener("toggle", ()=>{ f.kitsAberto = id("pnKits").open; });
     id("btIrKits").onclick = (ev)=>{ ev.preventDefault(); ev.stopPropagation(); irPara("kits"); };
-  }
-  if (admin){
-    id("btAbaReal").onclick = ()=>{ f.aba = "real"; desenhar(); };
-    id("btAbaSim").onclick = ()=>{ f.aba = "simulacao"; desenhar(); };
   }
   id("fPnBusca").addEventListener("input", ()=>{ f.busca = id("fPnBusca").value; pintar(); });
   id("fPnStatus").addEventListener("change", ()=>{ f.status = id("fPnStatus").value; pintar(); });
@@ -1137,16 +1112,14 @@ async function telaPainel(alvo){
     id("fPnBusca").value = ""; id("fPnStatus").value = ""; id("fPnParceiro").value = "";
     pintar();
   };
-  if (id("sImposto")) id("sImposto").addEventListener("input", ()=>{ sim.imposto = Number(id("sImposto").value)||0; pintar(); });
-  if (id("sSocio")) id("sSocio").addEventListener("input", ()=>{ sim.socio = Number(id("sSocio").value)||0; pintar(); });
   if (id("btTodas")) id("btTodas").onclick = ()=>{
-    const dentro = new Set([...marcadas(), ...visiveis().map(e=>e.id)]);
-    definirMarcadas([...dentro]);
+    const dentro = new Set([...f.selecionadas, ...visiveis().map(e=>e.id)]);
+    f.selecionadas = [...dentro];
     pintar();
   };
   if (id("btNenhuma")) id("btNenhuma").onclick = ()=>{
     const fora = new Set(visiveis().map(e=>e.id));
-    definirMarcadas(marcadas().filter(x=>!fora.has(x)));
+    f.selecionadas = f.selecionadas.filter(x=>!fora.has(x));
     pintar();
   };
 
@@ -1770,7 +1743,7 @@ async function telaPedidos(alvo){
   carregando(alvo);
   try{
     const r = await api("pedidos.listar", { status: estado.dados.status || "" });
-    const filtros = ["", "ENVIADO", "EM_ESPERA", "RECUSADO", "PAGO"];
+    const filtros = ["", "ENVIADO", "EM_ANDAMENTO", "EM_ESPERA", "RECUSADO", "PAGO"];
     alvo.innerHTML = `
       <div class="cabeca">
         <div><h1>${t("pedidos")}</h1><p>${r.pedidos.length} ${idioma==="pt-BR"?"pedidos":"orders"}</p></div>
@@ -1792,7 +1765,9 @@ async function telaPedidos(alvo){
           <td>${esc(p.compradorNome)}</td>
           <td><small class="mono">${p.ineps.map(i=>esc(i.inep)).join(", ")||"—"}</small></td>
           <td class="num mono">${dinheiro(p.valorTotal)}</td>
-          <td>${seloStatus(p.status)}</td>
+          <td>${seloStatus(p.status)}
+            <br><small class="mono" style="color:var(--texto-2)">
+              ${p.temNf?"NF ✓":"NF —"} · ${p.temComprovante?"Comp. ✓":"Comp. —"}</small></td>
           <td><button class="btn neutro pequeno" data-abrir="${p.id}">${t("detalhe")}</button></td>
         </tr>`).join("")}</tbody>
       </table></div>`}`;
@@ -2086,6 +2061,7 @@ async function telaPedidoDetalhe(alvo){
     const p = r.pedido;
     const perfil = estado.usuario.perfil;
     const podeDecidir = (perfil==="financeiro"||perfil==="admin") && p.status!=="PAGO";
+    // Em andamento o pedido ja foi aprovado: so falta documento.
     // Admin corrige qualquer pedido; o comprador, os proprios que ainda nao foram pagos.
     const podeEditar = perfil==="admin" || (perfil==="comprador" && p.status!=="PAGO");
     const ultimaObs = [...r.eventos].reverse().find(ev=> ev.observacao);
@@ -2106,6 +2082,8 @@ async function telaPedidoDetalhe(alvo){
         ${idioma==="pt-BR"?"o comprador confirmou o envio mesmo assim.":"the buyer confirmed it anyway."}</div>`:""}
       ${ultimaObs && p.status!=="PAGO" ? `<div class="aviso alerta" style="margin-bottom:14px">
         <h4>${esc(ultimaObs.usuarioNome)} · ${dataHora(ultimaObs.criadoEm)}</h4>${esc(ultimaObs.observacao)}</div>`:""}
+      ${p.status==="EM_ANDAMENTO"?`<div class="aviso alerta" style="margin-bottom:14px">
+        <h4>${t("pedidoAguardaDoc")}</h4>${t("faltaDocumento")} ${esc(r.faltando.join(", "))}</div>`:""}
 
       <div class="grade g2" style="align-items:start">
         <div class="cartao">
@@ -2138,6 +2116,14 @@ async function telaPedidoDetalhe(alvo){
               </div>`).join("")}
           </div>
 
+          <div class="cartao cartao-pad" style="margin-bottom:14px">
+            <h3 style="margin-bottom:4px">${t("documentos")}</h3>
+            <p style="color:var(--texto-2);font-size:12.5px;margin:0 0 12px">
+              ${r.faltando.length===0 ? t("docsCompletos") : `${t("faltaDocumento")} ${esc(r.faltando.join(", "))}`}</p>
+            <div id="anexoNf"></div>
+            <div id="anexoComprovante"></div>
+          </div>
+
           ${podeDecidir?`<div class="cartao cartao-pad">
             <h3 style="margin-bottom:12px">${t("decisao")}</h3>
             <div class="campo"><label for="dObs">${t("observacao")}</label><textarea id="dObs" placeholder="${t("obsObrigatoria")}"></textarea></div>
@@ -2159,6 +2145,77 @@ async function telaPedidoDetalhe(alvo){
         </div>
       </div>`;
 
+    // ---- documentos: NF do comprador, comprovante do financeiro ----
+    function montarAnexo(tipo){
+      const alvoAnexo = id(tipo === "nf" ? "anexoNf" : "anexoComprovante");
+      const anexo = r.anexos.find(x=>x.tipo===tipo);
+      const podeMexer = perfil==="admin" ||
+        (tipo==="nf" && perfil==="comprador" && p.status!=="RECUSADO") ||
+        (tipo==="comprovante" && perfil==="financeiro" && p.status!=="RECUSADO");
+
+      alvoAnexo.innerHTML = `
+        <div class="anexo ${anexo?"":"vazio-arq"}">
+          <div class="titulo">
+            <h4>${tipo==="nf"?t("anexoNf"):t("anexoComprovante")}</h4>
+            ${anexo?`<span class="selo verde">✓</span>`:`<span class="selo cinza">${t("semAnexo")}</span>`}
+          </div>
+          ${anexo?`
+            <div class="arquivo">${esc(anexo.nomeArquivo)}</div>
+            <small style="color:var(--texto-2)">${tamanhoLegivel(anexo.tamanho)} ·
+              ${esc(anexo.usuarioNome)} · ${dataHora(anexo.criadoEm)}</small>`
+          :`<small style="color:var(--texto-2)">${tipo==="nf"?t("anexoNfQuem"):t("anexoComprovanteQuem")}</small>`}
+          <div class="barra-acoes" style="margin-top:10px">
+            ${anexo?`<button class="btn neutro pequeno" data-baixar="${anexo.id}">${t("baixar")}</button>`:""}
+            ${podeMexer?`<button class="btn neutro pequeno" data-enviar="${tipo}">
+              ${anexo?t("trocarArquivo"):t("anexar")}</button>`:""}
+            ${anexo&&podeMexer?`<button class="btn neutro pequeno" data-remover="${anexo.id}">${t("removerAnexo")}</button>`:""}
+          </div>
+          <input type="file" data-campo="${tipo}" style="display:none">
+        </div>`;
+
+      const campo = alvoAnexo.querySelector(`[data-campo="${tipo}"]`);
+      const botao = alvoAnexo.querySelector("[data-enviar]");
+      if (botao) botao.onclick = ()=> campo.click();
+
+      campo.onchange = async ()=>{
+        const arquivo = campo.files[0];
+        if (!arquivo) return;
+        if (arquivo.size > 5*1024*1024){ torrada(t("arquivoGrande"), "erro"); campo.value=""; return; }
+        if (botao){ botao.disabled = true; botao.textContent = t("enviandoArquivo"); }
+        try{
+          const conteudo = await lerArquivo(arquivo);
+          await api("pedidos.anexar", {
+            pedidoId: p.id, tipo, nome: arquivo.name, mime: arquivo.type, conteudo,
+          });
+          torrada(t("salvo"), "ok");
+          desenhar();
+        }catch(err){
+          torrada(err.message, "erro", err.codigo);
+          if (botao){ botao.disabled = false; botao.textContent = t("anexar"); }
+        }
+      };
+
+      const baixar = alvoAnexo.querySelector("[data-baixar]");
+      if (baixar) baixar.onclick = async ()=>{
+        try{
+          const link = await api("pedidos.linkAnexo", { id: baixar.dataset.baixar });
+          window.open(link.url, "_blank");
+        }catch(err){ torrada(err.message, "erro", err.codigo); }
+      };
+
+      const remover = alvoAnexo.querySelector("[data-remover]");
+      if (remover) remover.onclick = async ()=>{
+        if (!confirm(t("removerAnexoConfirma"))) return;
+        try{
+          await api("pedidos.removerAnexo", { id: remover.dataset.remover });
+          torrada(t("salvo"), "ok");
+          desenhar();
+        }catch(err){ torrada(err.message, "erro", err.codigo); }
+      };
+    }
+    montarAnexo("nf");
+    montarAnexo("comprovante");
+
     id("btVoltar").onclick = ()=>irPara("pedidos");
     if (id("btEditar")) id("btEditar").onclick = ()=>{
       estado.rascunho = {
@@ -2174,9 +2231,14 @@ async function telaPedidoDetalhe(alvo){
       const obs = id("dObs").value.trim();
       if (decisao!=="pagar" && !obs){ torrada(t("obsObrigatoria"),"erro"); id("dObs").focus(); return; }
       try{
-        await api("pedidos.decidir", { id:p.id, decisao, observacao:obs });
-        torrada(t("salvo"),"ok"); desenhar();
-      }catch(e){ torrada(e.message,"erro",e.codigo); }
+        const resposta = await api("pedidos.decidir", { id:p.id, decisao, observacao:obs });
+        if (resposta.faltando && resposta.faltando.length > 0){
+          torrada(`${t("faltaDocumento")} ${resposta.faltando.join(", ")}`, "erro");
+        } else {
+          torrada(t("salvo"),"ok");
+        }
+        desenhar();
+      }catch(e){ torrada(e.message, "erro", e.codigo); }
     });
   }catch(e){ alvo.innerHTML = `<div class="aviso perigo">${esc(e.message)}</div>`; }
 }
