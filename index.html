@@ -254,12 +254,16 @@ const IDIOMAS = {
     margemLucro:"% de margem de lucro", percentualGasto:"% liberado para gasto",
     percentualGastoNota:"Teto de gasto que sustenta a margem. Vale para toda escola sem percentual proprio.",
     percentualSoma:"Com esses percentuais nao sobra nada para gasto.",
-    vemDosKits:"Deixe em branco ou zero para seguir o percentual da tela de Kits.",
+    vemDosKits:"Definido na tela de Kits, igual para todas as escolas.",
     padraoKits:"padrao dos Kits",
     todosStatus:"Todos os status", todosParceiros:"Todos os parceiros",
     buscarInep:"Buscar INEP, escola ou cidade", semParceiroFiltro:"Sem parceiro",
     marcarVisiveis:"Marcar visiveis", desmarcarVisiveis:"Desmarcar visiveis",
     visiveis:"visiveis", limparFiltros:"Limpar filtros", nenhumFiltro:"Nada bate com o filtro.",
+    visaoReal:"Real", visaoProjetada:"Projetado",
+    visaoRealNota:"So o que ja esta instalado. Escola sem AP instalado entra zerada.",
+    visaoProjetadaNota:"Usa os APs previstos onde ainda nao ha instalacao.",
+    escolasNoRecorte:"escolas no recorte", verEscola:"Abrir",
     comoCalcula:"Como chega neste numero",
     passoReceita:"Receita da tabela de kits",
     passoImposto:"Menos imposto",
@@ -361,12 +365,16 @@ const IDIOMAS = {
     margemLucro:"% profit margin", percentualGasto:"% released to spend",
     percentualGastoNota:"Spending ceiling that sustains the margin. Applies to every school without its own percentage.",
     percentualSoma:"These percentages leave nothing to spend.",
-    vemDosKits:"Leave blank or zero to follow the percentage from the Kits screen.",
+    vemDosKits:"Set on the Kits screen, the same for every school.",
     padraoKits:"Kits default",
     todosStatus:"All statuses", todosParceiros:"All partners",
     buscarInep:"Search INEP, school or city", semParceiroFiltro:"No partner",
     marcarVisiveis:"Select visible", desmarcarVisiveis:"Clear visible",
     visiveis:"visible", limparFiltros:"Clear filters", nenhumFiltro:"Nothing matches the filter.",
+    visaoReal:"Actual", visaoProjetada:"Projected",
+    visaoRealNota:"Only what is installed. Schools with no installed AP count as zero.",
+    visaoProjetadaNota:"Uses planned APs wherever nothing is installed yet.",
+    escolasNoRecorte:"schools in view", verEscola:"Open",
     comoCalcula:"How this number is reached",
     passoReceita:"Revenue from the kit table",
     passoImposto:"Less tax",
@@ -773,30 +781,167 @@ function seloStatus(status){
    =================================================================== */
 async function telaPainel(alvo){
   carregando(alvo);
+  const admin = estado.usuario.perfil === "admin";
+
+  let escolas = [], pedidos = {};
   try{
-    const r = await api("painel.resumo", {});
-    const admin = estado.usuario.perfil === "admin";
-    const tt = r.totais;
-    alvo.innerHTML = `
-      <div class="cabeca"><div><h1>${t("painel")}</h1><p>${t("resumoFinanceiro")}</p></div></div>
-      <div class="grade g4" style="margin-bottom:16px">
-        <div class="indicador"><div class="rotulo">${t("escolasAtivas")}</div><div class="valor">${numero(tt.escolas)}</div>
-          <div class="nota">${numero(tt.escolasComMiscelaneosNossos)} ${idioma==="pt-BR"?"com compra Novale":"bought by Novale"}</div></div>
-        <div class="indicador"><div class="rotulo">${t("apsInstalados")}</div><div class="valor">${numero(tt.apsInst)}</div>
-          <div class="nota">${numero(tt.apsPrev)} ${t("apsPrev").toLowerCase()}</div></div>
-        ${admin ? `<div class="indicador"><div class="rotulo">${t("receita")}</div><div class="valor">${dinheiro(tt.receita)}</div></div>` : ""}
-        <div class="indicador"><div class="rotulo">${t("limite")}</div><div class="valor">${dinheiro(tt.limite)}</div></div>
-        <div class="indicador"><div class="rotulo">${t("gastoTotal")}</div><div class="valor">${dinheiro(tt.gastoTotal)}</div></div>
-        <div class="indicador ${tt.saldo<0?"perigo":"ok"}"><div class="rotulo">${t("saldo")}</div><div class="valor">${dinheiro(tt.saldo)}</div></div>
-        <div class="indicador ${tt.estouradas>0?"perigo":""}"><div class="rotulo">${t("estouradas")}</div><div class="valor">${numero(tt.estouradas)}</div></div>
+    const [lista, resumo] = await Promise.all([
+      api("escolas.listar", {}),
+      api("painel.resumo", {}),
+    ]);
+    escolas = lista.escolas.filter(e=>e.ativo);
+    pedidos = resumo.pedidos;
+  }catch(e){ alvo.innerHTML = `<div class="aviso perigo">${esc(e.message)}</div>`; return; }
+
+  if (!estado.painel) estado.painel = { visao:"projetado", busca:"", status:"", parceiro:"" };
+  const f = estado.painel;
+  const parceirosDaLista = [...new Set(escolas.map(e=>e.nomeParceiro).filter(Boolean))].sort();
+
+  function visiveis(){
+    const busca = (f.busca||"").toLowerCase();
+    return escolas.filter(e=>{
+      if (f.status && e.status !== f.status) return false;
+      if (f.parceiro === "__sem__" && e.nomeParceiro) return false;
+      if (f.parceiro && f.parceiro !== "__sem__" && e.nomeParceiro !== f.parceiro) return false;
+      if (busca && !`${e.inep} ${e.escola} ${e.cidade} ${e.uf}`.toLowerCase().includes(busca)) return false;
+      return true;
+    });
+  }
+
+  // Cada escola tem dois retratos: o projetado (previstos quando falta
+  // instalacao) e o real (so o que ja foi instalado).
+  function numeros(e){
+    const real = f.visao === "real";
+    return {
+      aps: real ? (Number(e.qtdApsInst)||0) : (Number(e.apsBase)||0),
+      receita: real ? e.receitaReal : e.receita,
+      limite: real ? e.limiteReal : e.limite,
+      gastoInstalacao: real ? e.gastoInstalacaoReal : e.gastoInstalacao,
+      gastoPedidos: e.gastoPedidos,
+      gastoTotal: real ? e.gastoTotalReal : e.gastoTotal,
+      saldo: real ? e.saldoReal : e.saldo,
+    };
+  }
+
+  alvo.innerHTML = `
+    <div class="cabeca">
+      <div><h1>${t("painel")}</h1>
+        <p>${f.visao==="real" ? t("visaoRealNota") : t("visaoProjetadaNota")}</p></div>
+      <div class="barra-acoes">
+        <button class="btn ${f.visao==="real"?"":"neutro"}" id="btReal">${t("visaoReal")}</button>
+        <button class="btn ${f.visao==="projetado"?"":"neutro"}" id="btProjetado">${t("visaoProjetada")}</button>
       </div>
+    </div>
+
+    <div class="cartao cartao-pad" style="margin-bottom:16px">
       <div class="grade g4">
-        <div class="indicador"><div class="rotulo">${t("aguardando")}</div><div class="valor">${numero(r.pedidos.ENVIADO||0)}</div></div>
-        <div class="indicador"><div class="rotulo">${t("emEspera")}</div><div class="valor">${numero(r.pedidos.EM_ESPERA||0)}</div></div>
-        <div class="indicador"><div class="rotulo">${t("recusados")}</div><div class="valor">${numero(r.pedidos.RECUSADO||0)}</div></div>
-        <div class="indicador"><div class="rotulo">${t("pagos")}</div><div class="valor">${numero(r.pedidos.PAGO||0)}</div></div>
-      </div>`;
-  }catch(e){ alvo.innerHTML = `<div class="aviso perigo">${esc(e.message)}</div>`; }
+        <div class="campo" style="margin:0;grid-column:span 2"><label for="fPnBusca">${t("buscar")}</label>
+          <input id="fPnBusca" placeholder="${t("buscarInep")}" value="${esc(f.busca)}"></div>
+        <div class="campo" style="margin:0"><label for="fPnStatus">${t("status")}</label>
+          <select id="fPnStatus">
+            <option value="">${t("todosStatus")}</option>
+            ${STATUS_ESCOLA.map(x=>`<option value="${x}" ${f.status===x?"selected":""}>${x}</option>`).join("")}
+          </select></div>
+        <div class="campo" style="margin:0"><label for="fPnParceiro">${t("parceiro")}</label>
+          <select id="fPnParceiro">
+            <option value="">${t("todosParceiros")}</option>
+            <option value="__sem__" ${f.parceiro==="__sem__"?"selected":""}>${t("semParceiroFiltro")}</option>
+            ${parceirosDaLista.map(x=>`<option value="${esc(x)}" ${f.parceiro===x?"selected":""}>${esc(x)}</option>`).join("")}
+          </select></div>
+      </div>
+      <div class="barra-acoes" style="margin-top:10px">
+        <button class="btn neutro pequeno" id="btPnLimpar">${t("limparFiltros")}</button>
+        <span class="mono" id="pnContagem" style="align-self:center;color:var(--texto-2);font-size:12.5px"></span>
+      </div>
+    </div>
+
+    <div class="grade g4" id="pnTotais" style="margin-bottom:16px"></div>
+    <div class="grade g4" id="pnPedidos" style="margin-bottom:16px"></div>
+
+    <div class="cartao tabela-rolagem">
+      <table>
+        <thead><tr>
+          <th>${t("inep")}</th><th>${t("escola")}</th><th>${t("status")}</th>
+          <th class="num">${t("aps")}</th>
+          ${admin?`<th class="num">${t("receita")}</th>`:""}
+          <th class="num">${t("limite")}</th><th>${t("uso")}</th>
+          <th class="num">${t("saldo")}</th><th></th>
+        </tr></thead>
+        <tbody id="pnCorpo"></tbody>
+      </table>
+    </div>`;
+
+  function pintar(){
+    const lista = visiveis();
+    const soma = (campo)=> lista.reduce((acc,e)=> acc + (Number(numeros(e)[campo])||0), 0);
+    const receita = admin ? soma("receita") : 0;
+    const limite = soma("limite");
+    const gastoTotal = soma("gastoTotal");
+    const saldo = soma("saldo");
+    const estouradas = lista.filter(e=>{ const n = numeros(e); return n.limite > 0 && n.gastoTotal > n.limite; }).length;
+    const apsSoma = lista.reduce((acc,e)=> acc + (Number(numeros(e).aps)||0), 0);
+
+    id("pnContagem").textContent = `${lista.length} / ${escolas.length} ${t("escolasNoRecorte")}`;
+
+    id("pnTotais").innerHTML = `
+      <div class="indicador"><div class="rotulo">${t("escolasAtivas")}</div>
+        <div class="valor">${numero(lista.length)}</div>
+        <div class="nota">${numero(lista.filter(e=>e.miscelaneosPor==="nos").length)} ${idioma==="pt-BR"?"com compra Novale":"bought by Novale"}</div></div>
+      <div class="indicador"><div class="rotulo">${f.visao==="real"?t("apsInstalados"):t("apsSimulados")}</div>
+        <div class="valor">${numero(apsSoma)}</div>
+        <div class="nota">${numero(lista.reduce((a,e)=>a+(Number(e.qtdApsPrev)||0),0))} ${t("apsPrev").toLowerCase()}</div></div>
+      ${admin?`<div class="indicador"><div class="rotulo">${t("receita")}</div>
+        <div class="valor">${dinheiro(receita)}</div></div>`:""}
+      <div class="indicador"><div class="rotulo">${t("limite")}</div><div class="valor">${dinheiro(limite)}</div></div>
+      <div class="indicador"><div class="rotulo">${t("gastoTotal")}</div><div class="valor">${dinheiro(gastoTotal)}</div></div>
+      <div class="indicador ${saldo<0?"perigo":"ok"}"><div class="rotulo">${t("saldo")}</div>
+        <div class="valor">${dinheiro(saldo)}</div></div>
+      <div class="indicador ${estouradas>0?"perigo":""}"><div class="rotulo">${t("estouradas")}</div>
+        <div class="valor">${numero(estouradas)}</div></div>`;
+
+    id("pnPedidos").innerHTML = `
+      <div class="indicador"><div class="rotulo">${t("aguardando")}</div><div class="valor">${numero(pedidos.ENVIADO||0)}</div></div>
+      <div class="indicador"><div class="rotulo">${t("emEspera")}</div><div class="valor">${numero(pedidos.EM_ESPERA||0)}</div></div>
+      <div class="indicador"><div class="rotulo">${t("recusados")}</div><div class="valor">${numero(pedidos.RECUSADO||0)}</div></div>
+      <div class="indicador"><div class="rotulo">${t("pagos")}</div><div class="valor">${numero(pedidos.PAGO||0)}</div></div>`;
+
+    const corpo = id("pnCorpo");
+    if (lista.length === 0){
+      corpo.innerHTML = `<tr><td colspan="${admin?9:8}" class="vazio">${t("nenhumFiltro")}</td></tr>`;
+      return;
+    }
+    corpo.innerHTML = lista.map(e=>{
+      const n = numeros(e);
+      const barra = { limite:n.limite, gastoInstalacao:n.gastoInstalacao, gastoPedidos:n.gastoPedidos,
+        percentualUso: n.limite>0 ? n.gastoTotal/n.limite*100 : 0 };
+      return `<tr>
+        <td class="mono">${esc(e.inep)}</td>
+        <td><b>${esc(e.escola)}</b><br><small style="color:var(--texto-2)">${esc(e.cidade)}${e.uf?"/"+esc(e.uf):""} · ${esc(e.nomeParceiro||"—")}</small></td>
+        <td>${seloEscola(e.status)}</td>
+        <td class="num mono">${numero(n.aps)}${f.visao==="projetado"&&e.usandoPrevisto?`<br><small style="color:var(--alerta);font-family:Inter,sans-serif">${t("usandoPrevisto")}</small>`:""}</td>
+        ${admin?`<td class="num mono">${dinheiro(n.receita)}</td>`:""}
+        <td class="num mono">${dinheiro(n.limite)}</td>
+        <td style="min-width:210px">${barraCapacidade(barra)}</td>
+        <td class="num mono" style="color:${n.saldo<0?"var(--perigo)":"var(--ok)"}">${dinheiro(n.saldo)}</td>
+        <td><button class="btn neutro pequeno" data-ver="${e.id}">${t("verEscola")}</button></td>
+      </tr>`;
+    }).join("");
+
+    corpo.querySelectorAll("[data-ver]").forEach(b=> b.onclick = ()=>irPara("escolaDetalhe",{id:b.dataset.ver}));
+  }
+
+  id("btReal").onclick = ()=>{ f.visao = "real"; desenhar(); };
+  id("btProjetado").onclick = ()=>{ f.visao = "projetado"; desenhar(); };
+  id("fPnBusca").addEventListener("input", ()=>{ f.busca = id("fPnBusca").value; pintar(); });
+  id("fPnStatus").addEventListener("change", ()=>{ f.status = id("fPnStatus").value; pintar(); });
+  id("fPnParceiro").addEventListener("change", ()=>{ f.parceiro = id("fPnParceiro").value; pintar(); });
+  id("btPnLimpar").onclick = ()=>{
+    f.busca = ""; f.status = ""; f.parceiro = "";
+    id("fPnBusca").value = ""; id("fPnStatus").value = ""; id("fPnParceiro").value = "";
+    pintar();
+  };
+
+  pintar();
 }
 
 /* ===================================================================
@@ -818,7 +963,7 @@ async function telaEscolas(alvo){
           ${e.usandoPrevisto?`<br><small style="color:var(--alerta);font-family:Inter,sans-serif">${t("usandoPrevisto")}</small>`:""}</td>
         <td>${e.miscelaneosPor==="nos" ? `<span class="selo azul">${t("miscelaneosNos")}</span>` : `<span class="selo cinza">${t("miscelaneosParceiro")}</span>`}
             <br><small style="color:var(--texto-2)">${esc(e.nomeParceiro||"—")}</small></td>
-        ${admin?`<td class="num mono">${dinheiro(e.receita)}<br><small style="color:var(--texto-2)">${numero(e.percentualAplicado,2)}%${e.usandoPercentualPadrao?" · "+t("padraoKits"):""}</small></td>`:""}
+        ${admin?`<td class="num mono">${dinheiro(e.receita)}<br><small style="color:var(--texto-2)">${numero(e.percentualAplicado,2)}%</small></td>`:""}
         <td style="min-width:230px">${barraCapacidade(e)}</td>
         <td class="num mono" style="color:${e.saldo<0?"var(--perigo)":"var(--ok)"}">${dinheiro(e.saldo)}</td>
         <td><div class="barra-acoes">
@@ -1059,10 +1204,8 @@ async function telaEscolaForm(alvo){
         <div class="campo"><label for="cApsInst">${t("apsInst")}</label><input id="cApsInst" type="number" min="0" value="${e.qtdApsInst??0}"></div>
         <div class="campo"><label for="cRacks">${t("racks")}</label><input id="cRacks" type="number" min="0" value="${e.qtdRacks??1}"></div>
         ${ehAdmin?`
-        <div class="campo"><label for="cPercentual">${t("percentualLimite")}</label>
-          <input id="cPercentual" type="number" step="0.01" min="0" max="100"
-            placeholder="${estado.kits ? numero(Number(estado.kits.percentualGasto)||0,2) : "0"}"
-            value="${e.percentualLimite ? e.percentualLimite : ""}">
+        <div class="campo"><label>${t("percentualLimite")}</label>
+          <input value="${estado.kits ? numero(Number(estado.kits.percentualGasto)||0,2)+"%" : "—"}" disabled>
           <small style="color:var(--texto-3)">${t("vemDosKits")}</small></div>`:""}
       </div>
       ${ehAdmin?`<div id="previa" class="aviso info" style="margin:6px 0 16px"></div>`:""}
@@ -1076,7 +1219,7 @@ async function telaEscolaForm(alvo){
     if (!ehAdmin) return;
     const aps = numVal("cApsInst") > 0 ? numVal("cApsInst") : numVal("cApsPrev");
     const receita = receitaPorAps(aps);
-    const limite = receita * numVal("cPercentual")/100;
+    const limite = receita * (estado.kits ? (Number(estado.kits.percentualGasto)||0) : 0)/100;
     const racks = numVal("cRacks");
     const escolhido = parceiros.find(x=>x.id===val("cParceiro"));
     const doParceiro = (escolhido && escolhido.custos ? escolhido.custos : []).reduce((soma,c)=>{
@@ -1108,7 +1251,7 @@ async function telaEscolaForm(alvo){
   seguirParceiro();
 
   if (ehAdmin){
-    ["cApsInst","cApsPrev","cPercentual","cRacks"].forEach(c=> id(c).addEventListener("input", previa));
+    ["cApsInst","cApsPrev","cRacks"].forEach(c=> id(c).addEventListener("input", previa));
   }
   previa();
 
@@ -1122,7 +1265,6 @@ async function telaEscolaForm(alvo){
         uf: val("cUf"), projeto: val("cProjeto"), status: val("cStatus"), prioridade: val("cPrioridade"),
         qtdApsPrev: numVal("cApsPrev"), qtdApsInst: numVal("cApsInst"), parceiroId: val("cParceiro"),
         qtdRacks: numVal("cRacks"),
-        percentualLimite: ehAdmin ? numVal("cPercentual") : 0,
       });
       torrada(t("salvo"),"ok"); irPara(voltar);
     }catch(err){ torrada(err.message,"erro",err.codigo); }
@@ -1157,7 +1299,7 @@ async function telaEscolaDetalhe(alvo){
       <div class="grade g4" style="margin-bottom:16px">
         ${admin?`<div class="indicador"><div class="rotulo">${t("receita")}</div>
           <div class="valor">${dinheiro(e.receita)}</div>
-          <div class="nota">${numero(e.percentualAplicado,2)}% ${idioma==="pt-BR"?"liberado":"released"}${e.usandoPercentualPadrao?" · "+t("padraoKits"):""}</div></div>`:""}
+          <div class="nota">${numero(e.percentualAplicado,2)}% ${idioma==="pt-BR"?"liberado":"released"}</div></div>`:""}
         <div class="indicador"><div class="rotulo">${t("limite")}</div><div class="valor">${dinheiro(e.limite)}</div></div>
         <div class="indicador"><div class="rotulo">${t("gastoInstalacao")}</div><div class="valor">${dinheiro(e.gastoInstalacao)}</div></div>
         <div class="indicador"><div class="rotulo">${t("gastoPedidos")}</div><div class="valor">${dinheiro(e.gastoPedidos)}</div></div>
