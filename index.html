@@ -71,6 +71,11 @@ button{font-family:inherit}
 .rail .quem em{font-style:normal;font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:#8FA6C2}
 .conteudo{padding:26px 30px 60px;max-width:1500px}
 .cabeca{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:20px;flex-wrap:wrap}
+.abas{display:inline-flex;background:var(--linha-2);border:1px solid var(--linha);border-radius:10px;padding:3px;gap:3px}
+.abas .aba{border:0;background:transparent;color:var(--texto-2);font-size:13.5px;font-weight:600;
+  padding:8px 18px;border-radius:8px;cursor:pointer}
+.abas .aba:hover{color:var(--texto)}
+.abas .aba.ativa{background:var(--branco);color:var(--sinal);box-shadow:0 1px 2px rgba(16,28,46,.12)}
 .cabeca p{margin:4px 0 0;color:var(--texto-2)}
 @media(max-width:820px){
   .app{grid-template-columns:1fr}
@@ -547,7 +552,6 @@ function menuDoPerfil(){
   itens.push({ chave:"pedidos", texto:t("pedidos") });
   if (p === "comprador") itens.push({ chave:"parceiros", texto:t("parceiros") });
   if (p === "admin"){
-    itens.push({ chave:"simulacao", texto:t("simulacao") });
     itens.push({ chave:"kits", texto:t("kits") });
     itens.push({ chave:"parceiros", texto:t("parceiros") });
     itens.push({ chave:"usuarios", texto:t("usuarios") });
@@ -568,7 +572,7 @@ const TELAS = {
   escolas: telaEscolas,
   escolaForm: telaEscolaForm,
   escolaDetalhe: telaEscolaDetalhe,
-  simulacao: telaSimulacao,
+  simulacao: telaPainel,          // rota antiga cai no painel, aba de simulacao
   kits: telaKits,
   parceiros: telaParceiros,
   usuarios: telaUsuarios,
@@ -790,6 +794,7 @@ function seloStatus(status){
 async function telaPainel(alvo){
   carregando(alvo);
   const admin = estado.usuario.perfil === "admin";
+  if (admin) await carregarKits();
 
   let escolas = [], pedidos = {};
   try{
@@ -801,10 +806,23 @@ async function telaPainel(alvo){
     pedidos = resumo.pedidos;
   }catch(e){ alvo.innerHTML = `<div class="aviso perigo">${esc(e.message)}</div>`; return; }
 
-  if (!estado.painel) estado.painel = { visao:"projetado", busca:"", status:"", parceiro:"" };
-  const f = estado.painel;
-  const parceirosDaLista = [...new Set(escolas.map(e=>e.nomeParceiro).filter(Boolean))].sort();
+  const kits = estado.kits || {};
+  const percentualGasto = Number(kits.percentualGasto)||0;
 
+  if (!estado.painel) estado.painel = {
+    aba:"real", busca:"", status:"", parceiro:"",
+    sim:{ imposto:Number(kits.percentualImposto)||0, socio:Number(kits.percentualSocio)||0, aps:{}, selecionadas:null },
+  };
+  const f = estado.painel;
+  const sim = f.sim;
+
+  const todos = escolas.map(e=>e.id);
+  sim.selecionadas = sim.selecionadas === null ? todos.slice() : sim.selecionadas.filter(x=>todos.includes(x));
+
+  const parceirosDaLista = [...new Set(escolas.map(e=>e.nomeParceiro).filter(Boolean))].sort();
+  const apsDe = (e)=> sim.aps[e.id] !== undefined ? sim.aps[e.id] : (Number(e.apsBase)||0);
+
+  // O filtro define o recorte de TODO o calculo, nas duas abas.
   function visiveis(){
     const busca = (f.busca||"").toLowerCase();
     return escolas.filter(e=>{
@@ -816,29 +834,108 @@ async function telaPainel(alvo){
     });
   }
 
-  // Cada escola tem dois retratos: o projetado (previstos quando falta
-  // instalacao) e o real (so o que ja foi instalado).
-  function numeros(e){
-    const real = f.visao === "real";
+  /* Cadeia de resultado, igual nas duas abas:
+     imposto sobre o recebido; socio sobre (recebido - gastos - imposto). */
+  function fechar(linhas, imposto, socio){
+    const receita = linhas.reduce((s,l)=> s + l.receita, 0);
+    const gastos = linhas.reduce((s,l)=> s + l.gastos, 0);
+    const valorImposto = receita * (Number(imposto)||0) / 100;
+    const baseSocio = receita - gastos - valorImposto;
+    const valorSocio = Math.max(0, baseSocio) * (Number(socio)||0) / 100;
+    const custoTotal = gastos + valorImposto + valorSocio;
+    const lucro = receita - custoTotal;
+    const limite = linhas.reduce((s,l)=> s + l.limite, 0);
     return {
-      aps: real ? (Number(e.qtdApsInst)||0) : (Number(e.apsBase)||0),
-      receita: real ? e.receitaReal : e.receita,
-      limite: real ? e.limiteReal : e.limite,
-      gastoInstalacao: real ? e.gastoInstalacaoReal : e.gastoInstalacao,
-      gastoPedidos: e.gastoPedidos,
-      gastoTotal: real ? e.gastoTotalReal : e.gastoTotal,
-      saldo: real ? e.saldoReal : e.saldo,
+      linhas, receita, gastos, imposto:valorImposto, baseSocio, socio:valorSocio,
+      custoTotal, lucro, limite,
+      saldo: limite - gastos,
+      estouradas: linhas.filter(l=> l.limite > 0 && l.gastos > l.limite).length,
+      aps: linhas.reduce((s,l)=> s + l.aps, 0),
+      margem: custoTotal > 0 ? receita/custoTotal : 0,
+      margemLiquida: receita > 0 ? lucro/receita*100 : 0,
     };
   }
 
+  // Aba Real: exatamente o que esta cadastrado, contando so AP instalado.
+  function linhasReais(){
+    return visiveis().map(e=>({
+      e,
+      aps: Number(e.qtdApsInst)||0,
+      receita: Number(e.receitaReal)||0,
+      gastos: Number(e.gastoTotalReal)||0,
+      limite: Number(e.limiteReal)||0,
+      dentro: true,
+    }));
+  }
+
+  // Aba Simulacao: APs que voce digitou e marcacao linha a linha.
+  function linhasSimuladas(){
+    return visiveis().map(e=>{
+      const aps = apsDe(e);
+      const racks = Number(e.qtdRacks)||0;
+      const receita = receitaPorAps(aps);
+      const doParceiro = (e.detalheParceiro||[]).reduce((soma,c)=>{
+        const q = c.tipo==="ap" ? aps : c.tipo==="rack" ? racks : 1;
+        return soma + (Number(c.valor)||0)*q;
+      }, 0);
+      return {
+        e, aps, receita,
+        gastos: doParceiro + (Number(e.gastoPedidos)||0),
+        limite: receita * percentualGasto / 100,
+        dentro: sim.selecionadas.includes(e.id),
+      };
+    });
+  }
+
+  function cartoesLucro(c, imposto, socio){
+    return `
+      <div class="indicador"><div class="rotulo">${t("totalRecebido")}</div>
+        <div class="valor">${dinheiro(c.receita)}</div></div>
+      <div class="indicador"><div class="rotulo">${t("totalImpostos")}</div>
+        <div class="valor">${dinheiro(c.imposto)}</div>
+        <div class="nota">${numero(imposto,2)}% ${idioma==="pt-BR"?"do recebido":"of revenue"}</div></div>
+      <div class="indicador"><div class="rotulo">${t("totalGastos")}</div>
+        <div class="valor">${dinheiro(c.gastos)}</div></div>
+      <div class="indicador"><div class="rotulo">${t("baseSocio")}</div>
+        <div class="valor">${dinheiro(c.baseSocio)}</div>
+        <div class="nota">${t("baseSocioNota")}</div></div>
+      <div class="indicador"><div class="rotulo">${t("valorSocio")}</div>
+        <div class="valor">${dinheiro(c.socio)}</div>
+        <div class="nota">${numero(socio,2)}% ${idioma==="pt-BR"?"sobre a base":"of the base"}</div></div>
+      <div class="indicador"><div class="rotulo">${t("custoTotal")}</div>
+        <div class="valor">${dinheiro(c.custoTotal)}</div></div>
+      <div class="indicador ${c.lucro<0?"perigo":"ok"}"><div class="rotulo">${t("lucro")}</div>
+        <div class="valor">${dinheiro(c.lucro)}</div>
+        <div class="nota">${t("margemLiquida")}: ${numero(c.margemLiquida,1)}%</div></div>
+      <div class="indicador ${c.margem<1?"perigo":"ok"}"><div class="rotulo">${t("margem")}</div>
+        <div class="valor">${c.custoTotal>0 ? numero(c.margem,2)+"x" : "—"}</div></div>`;
+  }
+
+  function cartoesVerba(c, lista){
+    return `
+      <div class="indicador"><div class="rotulo">${t("escolasAtivas")}</div>
+        <div class="valor">${numero(lista.length)}</div>
+        <div class="nota">${numero(escolas.length)} ${idioma==="pt-BR"?"no total":"in total"}</div></div>
+      <div class="indicador"><div class="rotulo">${f.aba==="real"?t("apsInstalados"):t("apsSimulados")}</div>
+        <div class="valor">${numero(c.aps)}</div>
+        <div class="nota">${numero(lista.reduce((a,l)=>a+(Number(l.e.qtdApsPrev)||0),0))} ${t("apsPrev").toLowerCase()}</div></div>
+      <div class="indicador"><div class="rotulo">${t("limite")}</div>
+        <div class="valor">${dinheiro(c.limite)}</div>
+        <div class="nota">${numero(percentualGasto,2)}% ${t("padraoKits")}</div></div>
+      <div class="indicador ${c.saldo<0?"perigo":"ok"}"><div class="rotulo">${t("saldo")}</div>
+        <div class="valor">${dinheiro(c.saldo)}</div>
+        <div class="nota">${numero(c.estouradas)} ${t("estouradas").toLowerCase()}</div></div>`;
+  }
+
+  // -------------------------------------------------------------- esqueleto
   alvo.innerHTML = `
     <div class="cabeca">
       <div><h1>${t("painel")}</h1>
-        <p>${f.visao==="real" ? t("visaoRealNota") : t("visaoProjetadaNota")}</p></div>
-      <div class="barra-acoes">
-        <button class="btn ${f.visao==="real"?"":"neutro"}" id="btReal">${t("visaoReal")}</button>
-        <button class="btn ${f.visao==="projetado"?"":"neutro"}" id="btProjetado">${t("visaoProjetada")}</button>
-      </div>
+        <p>${!admin ? t("resumoFinanceiro") : (f.aba==="real" ? t("visaoRealNota") : t("notaSimulacao"))}</p></div>
+      ${admin?`<div class="abas">
+        <button class="aba ${f.aba==="real"?"ativa":""}" id="btAbaReal">${t("visaoReal")}</button>
+        <button class="aba ${f.aba==="simulacao"?"ativa":""}" id="btAbaSim">${t("simulacao")}</button>
+      </div>`:""}
     </div>
 
     <div class="cartao cartao-pad" style="margin-bottom:16px">
@@ -857,95 +954,131 @@ async function telaPainel(alvo){
             ${parceirosDaLista.map(x=>`<option value="${esc(x)}" ${f.parceiro===x?"selected":""}>${esc(x)}</option>`).join("")}
           </select></div>
       </div>
+
+      ${(admin && f.aba==="simulacao")?`
+      <hr style="border:0;border-top:1px solid var(--linha);margin:14px 0">
+      <div class="grade g4">
+        <div class="campo" style="margin:0"><label for="sImposto">${t("imposto")}</label>
+          <input id="sImposto" type="number" step="0.01" min="0" max="100" class="num" value="${sim.imposto}"></div>
+        <div class="campo" style="margin:0"><label for="sSocio">${t("socio")}</label>
+          <input id="sSocio" type="number" step="0.01" min="0" max="100" class="num" value="${sim.socio}"></div>
+        <div class="campo" style="margin:0"><label>&nbsp;</label>
+          <div class="barra-acoes">
+            <button class="btn neutro pequeno" id="btTodas">${t("marcarVisiveis")}</button>
+            <button class="btn neutro pequeno" id="btNenhuma">${t("desmarcarVisiveis")}</button>
+          </div></div>
+        <div class="campo" style="margin:0"><label>&nbsp;</label>
+          <div class="mono" id="simContagem" style="padding-top:9px;color:var(--texto-2);font-size:12.5px"></div></div>
+      </div>`:""}
+
       <div class="barra-acoes" style="margin-top:10px">
         <button class="btn neutro pequeno" id="btPnLimpar">${t("limparFiltros")}</button>
         <span class="mono" id="pnContagem" style="align-self:center;color:var(--texto-2);font-size:12.5px"></span>
       </div>
     </div>
 
-    <div class="grade g4" id="pnTotais" style="margin-bottom:16px"></div>
-    <div class="grade g4" id="pnPedidos" style="margin-bottom:16px"></div>
+    ${admin?`<div class="grade g4" id="pnLucro" style="margin-bottom:16px"></div>`:""}
+    <div class="grade g4" id="pnVerba" style="margin-bottom:16px"></div>
+    ${(!admin || f.aba==="real")?`<div class="grade g4" id="pnPedidos" style="margin-bottom:16px"></div>`:""}
 
     <div class="cartao tabela-rolagem">
       <table>
         <thead><tr>
+          ${(admin && f.aba==="simulacao")?`<th style="width:34px"></th>`:""}
           <th>${t("inep")}</th><th>${t("escola")}</th><th>${t("status")}</th>
-          <th class="num">${t("aps")}</th>
+          <th class="num">${(admin && f.aba==="simulacao")?t("apsSimulados"):t("aps")}</th>
           ${admin?`<th class="num">${t("receita")}</th>`:""}
-          <th class="num">${t("limite")}</th><th>${t("uso")}</th>
-          <th class="num">${t("saldo")}</th><th></th>
+          <th class="num">${t("totalGastos")}</th>
+          <th class="num">${t("limite")}</th><th class="num">${t("saldo")}</th>
+          ${admin?`<th class="num">${t("lucro")}</th>`:""}
+          ${f.aba==="real"?`<th></th>`:""}
         </tr></thead>
         <tbody id="pnCorpo"></tbody>
       </table>
     </div>`;
 
+  // -------------------------------------------------------------- pintura
   function pintar(){
-    const lista = visiveis();
-    const soma = (campo)=> lista.reduce((acc,e)=> acc + (Number(numeros(e)[campo])||0), 0);
-    const receita = admin ? soma("receita") : 0;
-    const limite = soma("limite");
-    const gastoTotal = soma("gastoTotal");
-    const saldo = soma("saldo");
-    const estouradas = lista.filter(e=>{ const n = numeros(e); return n.limite > 0 && n.gastoTotal > n.limite; }).length;
-    const apsSoma = lista.reduce((acc,e)=> acc + (Number(numeros(e).aps)||0), 0);
+    const simulando = admin && f.aba === "simulacao";
+    const todasLinhas = simulando ? linhasSimuladas() : linhasReais();
+    const naConta = todasLinhas.filter(l=>l.dentro);
+    const imposto = simulando ? sim.imposto : (Number(kits.percentualImposto)||0);
+    const socio = simulando ? sim.socio : (Number(kits.percentualSocio)||0);
+    const c = fechar(naConta, imposto, socio);
 
-    id("pnContagem").textContent = `${lista.length} / ${escolas.length} ${t("escolasNoRecorte")}`;
-
-    id("pnTotais").innerHTML = `
-      <div class="indicador"><div class="rotulo">${t("escolasAtivas")}</div>
-        <div class="valor">${numero(lista.length)}</div>
-        <div class="nota">${numero(lista.filter(e=>e.miscelaneosPor==="nos").length)} ${idioma==="pt-BR"?"com compra Novale":"bought by Novale"}</div></div>
-      <div class="indicador"><div class="rotulo">${f.visao==="real"?t("apsInstalados"):t("apsSimulados")}</div>
-        <div class="valor">${numero(apsSoma)}</div>
-        <div class="nota">${numero(lista.reduce((a,e)=>a+(Number(e.qtdApsPrev)||0),0))} ${t("apsPrev").toLowerCase()}</div></div>
-      ${admin?`<div class="indicador"><div class="rotulo">${t("receita")}</div>
-        <div class="valor">${dinheiro(receita)}</div></div>`:""}
-      <div class="indicador"><div class="rotulo">${t("limite")}</div><div class="valor">${dinheiro(limite)}</div></div>
-      <div class="indicador"><div class="rotulo">${t("gastoTotal")}</div><div class="valor">${dinheiro(gastoTotal)}</div></div>
-      <div class="indicador ${saldo<0?"perigo":"ok"}"><div class="rotulo">${t("saldo")}</div>
-        <div class="valor">${dinheiro(saldo)}</div></div>
-      <div class="indicador ${estouradas>0?"perigo":""}"><div class="rotulo">${t("estouradas")}</div>
-        <div class="valor">${numero(estouradas)}</div></div>`;
-
-    id("pnPedidos").innerHTML = `
+    id("pnContagem").textContent = `${todasLinhas.length} / ${escolas.length} ${t("escolasNoRecorte")}`;
+    if (id("simContagem")){
+      id("simContagem").textContent = `${naConta.length} ${t("selecionadas")}`;
+    }
+    if (id("pnLucro")) id("pnLucro").innerHTML = cartoesLucro(c, imposto, socio);
+    id("pnVerba").innerHTML = cartoesVerba(c, naConta);
+    if (id("pnPedidos")) id("pnPedidos").innerHTML = `
       <div class="indicador"><div class="rotulo">${t("aguardando")}</div><div class="valor">${numero(pedidos.ENVIADO||0)}</div></div>
       <div class="indicador"><div class="rotulo">${t("emEspera")}</div><div class="valor">${numero(pedidos.EM_ESPERA||0)}</div></div>
       <div class="indicador"><div class="rotulo">${t("recusados")}</div><div class="valor">${numero(pedidos.RECUSADO||0)}</div></div>
       <div class="indicador"><div class="rotulo">${t("pagos")}</div><div class="valor">${numero(pedidos.PAGO||0)}</div></div>`;
 
     const corpo = id("pnCorpo");
-    if (lista.length === 0){
-      corpo.innerHTML = `<tr><td colspan="${admin?9:8}" class="vazio">${t("nenhumFiltro")}</td></tr>`;
+    if (todasLinhas.length === 0){
+      corpo.innerHTML = `<tr><td colspan="10" class="vazio">${t("nenhumFiltro")}</td></tr>`;
       return;
     }
-    corpo.innerHTML = lista.map(e=>{
-      const n = numeros(e);
-      const barra = { limite:n.limite, gastoInstalacao:n.gastoInstalacao, gastoPedidos:n.gastoPedidos,
-        percentualUso: n.limite>0 ? n.gastoTotal/n.limite*100 : 0 };
-      return `<tr>
+    corpo.innerHTML = todasLinhas.map(l=>{
+      const e = l.e;
+      const lucro = l.receita - l.gastos;
+      return `<tr style="opacity:${l.dentro?"1":".42"}">
+        ${simulando?`<td><input type="checkbox" data-sim="${e.id}" ${l.dentro?"checked":""}
+          aria-label="${esc(e.escola)}" style="width:16px;height:16px"></td>`:""}
         <td class="mono">${esc(e.inep)}</td>
         <td><b>${esc(e.escola)}</b><br><small style="color:var(--texto-2)">${esc(e.cidade)}${e.uf?"/"+esc(e.uf):""} · ${esc(e.nomeParceiro||"—")}</small></td>
         <td>${seloEscola(e.status)}</td>
-        <td class="num mono">${numero(n.aps)}${f.visao==="projetado"&&e.usandoPrevisto?`<br><small style="color:var(--alerta);font-family:Inter,sans-serif">${t("usandoPrevisto")}</small>`:""}</td>
-        ${admin?`<td class="num mono">${dinheiro(n.receita)}</td>`:""}
-        <td class="num mono">${dinheiro(n.limite)}</td>
-        <td style="min-width:210px">${barraCapacidade(barra)}</td>
-        <td class="num mono" style="color:${n.saldo<0?"var(--perigo)":"var(--ok)"}">${dinheiro(n.saldo)}</td>
-        <td><button class="btn neutro pequeno" data-ver="${e.id}">${t("verEscola")}</button></td>
+        <td class="num">${simulando
+          ? `<input type="number" min="0" class="num" style="width:80px;text-align:right" value="${l.aps}" data-aps="${e.id}">`
+          : `<span class="mono">${numero(l.aps)}</span>`}</td>
+        ${admin?`<td class="num mono">${dinheiro(l.receita)}</td>`:""}
+        <td class="num mono">${dinheiro(l.gastos)}</td>
+        <td class="num mono">${dinheiro(l.limite)}</td>
+        <td class="num mono" style="color:${l.limite-l.gastos<0?"var(--perigo)":"var(--ok)"}">${dinheiro(l.limite-l.gastos)}</td>
+        ${admin?`<td class="num mono" style="color:${lucro<0?"var(--perigo)":"var(--texto)"}">${dinheiro(lucro)}</td>`:""}
+        ${f.aba==="real"?`<td><button class="btn neutro pequeno" data-ver="${e.id}">${t("verEscola")}</button></td>`:""}
       </tr>`;
     }).join("");
 
     corpo.querySelectorAll("[data-ver]").forEach(b=> b.onclick = ()=>irPara("escolaDetalhe",{id:b.dataset.ver}));
+    corpo.querySelectorAll("[data-sim]").forEach(chk=> chk.onchange = ()=>{
+      const eid = chk.dataset.sim;
+      if (chk.checked){ if(!sim.selecionadas.includes(eid)) sim.selecionadas.push(eid); }
+      else sim.selecionadas = sim.selecionadas.filter(x=>x!==eid);
+      pintar();
+    });
+    corpo.querySelectorAll("[data-aps]").forEach(inp=> inp.addEventListener("input", ()=>{
+      sim.aps[inp.dataset.aps] = Math.max(0, Math.trunc(Number(inp.value)||0));
+      pintar();
+    }));
   }
 
-  id("btReal").onclick = ()=>{ f.visao = "real"; desenhar(); };
-  id("btProjetado").onclick = ()=>{ f.visao = "projetado"; desenhar(); };
+  // -------------------------------------------------------------- ligacoes
+  if (admin){
+    id("btAbaReal").onclick = ()=>{ f.aba = "real"; desenhar(); };
+    id("btAbaSim").onclick = ()=>{ f.aba = "simulacao"; desenhar(); };
+  }
   id("fPnBusca").addEventListener("input", ()=>{ f.busca = id("fPnBusca").value; pintar(); });
   id("fPnStatus").addEventListener("change", ()=>{ f.status = id("fPnStatus").value; pintar(); });
   id("fPnParceiro").addEventListener("change", ()=>{ f.parceiro = id("fPnParceiro").value; pintar(); });
   id("btPnLimpar").onclick = ()=>{
     f.busca = ""; f.status = ""; f.parceiro = "";
     id("fPnBusca").value = ""; id("fPnStatus").value = ""; id("fPnParceiro").value = "";
+    pintar();
+  };
+  if (id("sImposto")) id("sImposto").addEventListener("input", ()=>{ sim.imposto = Number(id("sImposto").value)||0; pintar(); });
+  if (id("sSocio")) id("sSocio").addEventListener("input", ()=>{ sim.socio = Number(id("sSocio").value)||0; pintar(); });
+  if (id("btTodas")) id("btTodas").onclick = ()=>{
+    for (const e of visiveis()) if (!sim.selecionadas.includes(e.id)) sim.selecionadas.push(e.id);
+    pintar();
+  };
+  if (id("btNenhuma")) id("btNenhuma").onclick = ()=>{
+    const fora = new Set(visiveis().map(e=>e.id));
+    sim.selecionadas = sim.selecionadas.filter(x=>!fora.has(x));
     pintar();
   };
 
@@ -1376,223 +1509,6 @@ async function telaEscolaDetalhe(alvo){
     id("btVoltar").onclick = ()=>irPara("escolas");
     alvo.querySelectorAll("[data-pedido]").forEach(b=> b.onclick = ()=>irPara("pedidoDetalhe",{id:b.dataset.pedido}));
   }catch(err){ alvo.innerHTML = `<div class="aviso perigo">${esc(err.message)}</div>`; }
-}
-
-/* ===================================================================
-   11a. TELA — SIMULACAO DE LUCRO (admin)
-   Imposto incide sobre o total a receber.
-   O parceiro socio recebe sobre (recebido - gastos - impostos).
-   =================================================================== */
-async function telaSimulacao(alvo){
-  carregando(alvo);
-  let escolas = [];
-  await carregarKits();
-  try{
-    escolas = (await api("escolas.listar", {})).escolas.filter(e=>e.ativo);
-  }catch(e){ alvo.innerHTML = `<div class="aviso perigo">${esc(e.message)}</div>`; return; }
-
-  if (!estado.simulacao) estado.simulacao = {
-    imposto: Number(estado.kits && estado.kits.percentualImposto)||0,
-    socio: Number(estado.kits && estado.kits.percentualSocio)||0,
-    selecionadas:null, aps:{},
-  };
-  const sim = estado.simulacao;
-  const todos = escolas.map(e=>e.id);
-  sim.selecionadas = sim.selecionadas === null ? todos.slice() : sim.selecionadas.filter(x=>todos.includes(x));
-
-  const apsDe = (e)=> sim.aps[e.id] !== undefined ? sim.aps[e.id] : (Number(e.apsBase)||0);
-
-  // Filtros so mudam o que aparece na tabela. Quem entra na conta e a marcacao.
-  if (!sim.filtros) sim.filtros = { busca:"", status:"", parceiro:"" };
-  const filtros = sim.filtros;
-
-  const parceirosDaLista = [...new Set(escolas.map(e=>e.nomeParceiro).filter(Boolean))].sort();
-
-  function visiveis(){
-    const busca = (filtros.busca||"").toLowerCase();
-    return escolas.filter(e=>{
-      if (filtros.status && e.status !== filtros.status) return false;
-      if (filtros.parceiro === "__sem__" && e.nomeParceiro) return false;
-      if (filtros.parceiro && filtros.parceiro !== "__sem__" && e.nomeParceiro !== filtros.parceiro) return false;
-      if (busca && !`${e.inep} ${e.escola} ${e.cidade} ${e.uf}`.toLowerCase().includes(busca)) return false;
-      return true;
-    });
-  }
-
-  function contas(){
-    let receita = 0, gastos = 0;
-    const linhas = escolas.map(e=>{
-      const aps = apsDe(e);
-      const r = receitaPorAps(aps);
-      const racks = Number(e.qtdRacks)||0;
-      const doParceiro = (e.detalheParceiro||[]).reduce((soma,c)=>{
-        const q = c.tipo==="ap" ? aps : c.tipo==="rack" ? racks : 1;
-        return soma + (Number(c.valor)||0)*q;
-      }, 0);
-      const g = doParceiro + (Number(e.gastoPedidos)||0);
-      const dentro = sim.selecionadas.includes(e.id);
-      if (dentro){ receita += r; gastos += g; }
-      return { e, aps, receita:r, gastos:g, dentro };
-    });
-    const imposto = receita * (Number(sim.imposto)||0) / 100;
-    const baseSocio = receita - gastos - imposto;
-    const socio = Math.max(0, baseSocio) * (Number(sim.socio)||0) / 100;
-    const custoTotal = gastos + imposto + socio;
-    const lucro = receita - custoTotal;
-    return { linhas, receita, gastos, imposto, baseSocio, socio, custoTotal, lucro,
-      margem: custoTotal > 0 ? receita/custoTotal : 0,
-      margemLiquida: receita > 0 ? lucro/receita*100 : 0 };
-  }
-
-  alvo.innerHTML = `
-    <div class="cabeca">
-      <div><h1>${t("simulacao")}</h1><p>${t("notaSimulacao")}</p></div>
-    </div>
-
-    <div class="cartao cartao-pad" style="margin-bottom:16px">
-      <div class="grade g4">
-        <div class="campo" style="margin:0"><label for="sImposto">${t("imposto")}</label>
-          <input id="sImposto" type="number" step="0.01" min="0" max="100" class="num" value="${sim.imposto}"></div>
-        <div class="campo" style="margin:0"><label for="sSocio">${t("socio")}</label>
-          <input id="sSocio" type="number" step="0.01" min="0" max="100" class="num" value="${sim.socio}"></div>
-        <div class="campo" style="margin:0"><label>&nbsp;</label>
-          <div class="barra-acoes">
-            <button class="btn neutro pequeno" id="btTodas">${t("marcarVisiveis")}</button>
-            <button class="btn neutro pequeno" id="btNenhuma">${t("desmarcarVisiveis")}</button>
-          </div></div>
-        <div class="campo" style="margin:0"><label>&nbsp;</label>
-          <div class="mono" id="simContagem" style="padding-top:9px;color:var(--texto-2)"></div></div>
-      </div>
-
-      <hr style="border:0;border-top:1px solid var(--linha);margin:14px 0">
-
-      <div class="grade g4">
-        <div class="campo" style="margin:0;grid-column:span 2"><label for="fSimBusca">${t("buscar")}</label>
-          <input id="fSimBusca" placeholder="${t("buscarInep")}" value="${esc(filtros.busca)}"></div>
-        <div class="campo" style="margin:0"><label for="fSimStatus">${t("status")}</label>
-          <select id="fSimStatus">
-            <option value="">${t("todosStatus")}</option>
-            ${STATUS_ESCOLA.map(x=>`<option value="${x}" ${filtros.status===x?"selected":""}>${x}</option>`).join("")}
-          </select></div>
-        <div class="campo" style="margin:0"><label for="fSimParceiro">${t("parceiro")}</label>
-          <select id="fSimParceiro">
-            <option value="">${t("todosParceiros")}</option>
-            <option value="__sem__" ${filtros.parceiro==="__sem__"?"selected":""}>${t("semParceiroFiltro")}</option>
-            ${parceirosDaLista.map(x=>`<option value="${esc(x)}" ${filtros.parceiro===x?"selected":""}>${esc(x)}</option>`).join("")}
-          </select></div>
-      </div>
-      <div class="barra-acoes" style="margin-top:10px">
-        <button class="btn neutro pequeno" id="btLimparFiltros">${t("limparFiltros")}</button>
-      </div>
-    </div>
-
-    <div class="grade g4" id="simTotais" style="margin-bottom:16px"></div>
-
-    <div class="cartao tabela-rolagem">
-      <table>
-        <thead><tr>
-          <th style="width:34px"></th><th>${t("inep")}</th><th>${t("escola")}</th>
-          <th class="num">${t("apsSimulados")}</th><th class="num">${t("receita")}</th>
-          <th class="num">${t("totalGastos")}</th><th class="num">${t("lucro")}</th>
-        </tr></thead>
-        <tbody id="simCorpo"></tbody>
-      </table>
-    </div>`;
-
-  function pintarTotais(){
-    const c = contas();
-    const qtdVisiveis = visiveis().length;
-    id("simContagem").textContent =
-      `${sim.selecionadas.length} / ${escolas.length} ${t("selecionadas")}`
-      + (qtdVisiveis !== escolas.length ? ` · ${qtdVisiveis} ${t("visiveis")}` : "");
-    id("simTotais").innerHTML = `
-      <div class="indicador"><div class="rotulo">${t("totalRecebido")}</div>
-        <div class="valor">${dinheiro(c.receita)}</div></div>
-      <div class="indicador"><div class="rotulo">${t("totalImpostos")}</div>
-        <div class="valor">${dinheiro(c.imposto)}</div><div class="nota">${numero(sim.imposto,2)}% ${idioma==="pt-BR"?"do recebido":"of revenue"}</div></div>
-      <div class="indicador"><div class="rotulo">${t("totalGastos")}</div>
-        <div class="valor">${dinheiro(c.gastos)}</div></div>
-      <div class="indicador"><div class="rotulo">${t("valorSocio")}</div>
-        <div class="valor">${dinheiro(c.socio)}</div>
-        <div class="nota">${numero(sim.socio,2)}% ${idioma==="pt-BR"?"sobre":"of"} ${dinheiro(c.baseSocio)}</div></div>
-      <div class="indicador"><div class="rotulo">${t("baseSocio")}</div>
-        <div class="valor">${dinheiro(c.baseSocio)}</div><div class="nota">${t("baseSocioNota")}</div></div>
-      <div class="indicador"><div class="rotulo">${t("custoTotal")}</div>
-        <div class="valor">${dinheiro(c.custoTotal)}</div></div>
-      <div class="indicador ${c.lucro<0?"perigo":"ok"}"><div class="rotulo">${t("lucro")}</div>
-        <div class="valor">${dinheiro(c.lucro)}</div>
-        <div class="nota">${t("margemLiquida")}: ${numero(c.margemLiquida,1)}%</div></div>
-      <div class="indicador ${c.margem<1?"perigo":"ok"}"><div class="rotulo">${t("margem")}</div>
-        <div class="valor">${c.custoTotal>0 ? numero(c.margem,2)+"x" : "—"}</div></div>`;
-    c.linhas.forEach(l=>{
-      const r = id(`simR${l.e.id}`), g = id(`simG${l.e.id}`), lu = id(`simL${l.e.id}`);
-      if (r) r.textContent = dinheiro(l.receita);
-      if (g) g.textContent = dinheiro(l.gastos);
-      if (lu){ lu.textContent = dinheiro(l.receita-l.gastos);
-        lu.style.color = (l.receita-l.gastos) < 0 ? "var(--perigo)" : "var(--texto)"; }
-      const tr = id(`simTr${l.e.id}`);
-      if (tr) tr.style.opacity = l.dentro ? "1" : ".42";
-    });
-  }
-
-  const corpo = id("simCorpo");
-
-  function montarCorpo(){
-    const lista = visiveis();
-    if (lista.length === 0){
-      corpo.innerHTML = `<tr><td colspan="7" class="vazio">${t("nenhumFiltro")}</td></tr>`;
-      return;
-    }
-    corpo.innerHTML = lista.map(e=>`
-      <tr id="simTr${e.id}">
-        <td><input type="checkbox" data-sim="${e.id}" ${sim.selecionadas.includes(e.id)?"checked":""}
-          aria-label="${esc(e.escola)}" style="width:16px;height:16px"></td>
-        <td class="mono">${esc(e.inep)}</td>
-        <td><b>${esc(e.escola)}</b><br><small style="color:var(--texto-2)">${esc(e.cidade)}${e.uf?"/"+esc(e.uf):""} · ${esc(e.nomeParceiro||"—")}</small>
-          <div style="margin-top:4px">${seloEscola(e.status)}</div></td>
-        <td class="num"><input type="number" min="0" class="num" style="width:82px;text-align:right"
-          value="${apsDe(e)}" data-aps="${e.id}"></td>
-        <td class="num mono" id="simR${e.id}"></td>
-        <td class="num mono" id="simG${e.id}"></td>
-        <td class="num mono" id="simL${e.id}"></td>
-      </tr>`).join("");
-
-    corpo.querySelectorAll("[data-sim]").forEach(chk=> chk.onchange = ()=>{
-      const eid = chk.dataset.sim;
-      if (chk.checked){ if(!sim.selecionadas.includes(eid)) sim.selecionadas.push(eid); }
-      else sim.selecionadas = sim.selecionadas.filter(x=>x!==eid);
-      pintarTotais();
-    });
-    corpo.querySelectorAll("[data-aps]").forEach(inp=> inp.addEventListener("input", ()=>{
-      sim.aps[inp.dataset.aps] = Math.max(0, Math.trunc(Number(inp.value)||0));
-      pintarTotais();
-    }));
-  }
-
-  function aplicarFiltros(){ montarCorpo(); pintarTotais(); }
-
-  id("fSimBusca").addEventListener("input", ()=>{ filtros.busca = id("fSimBusca").value; aplicarFiltros(); });
-  id("fSimStatus").addEventListener("change", ()=>{ filtros.status = id("fSimStatus").value; aplicarFiltros(); });
-  id("fSimParceiro").addEventListener("change", ()=>{ filtros.parceiro = id("fSimParceiro").value; aplicarFiltros(); });
-  id("btLimparFiltros").onclick = ()=>{
-    filtros.busca = ""; filtros.status = ""; filtros.parceiro = "";
-    id("fSimBusca").value = ""; id("fSimStatus").value = ""; id("fSimParceiro").value = "";
-    aplicarFiltros();
-  };
-  id("sImposto").addEventListener("input", ()=>{ sim.imposto = Number(id("sImposto").value)||0; pintarTotais(); });
-  id("sSocio").addEventListener("input", ()=>{ sim.socio = Number(id("sSocio").value)||0; pintarTotais(); });
-  id("btTodas").onclick = ()=>{
-    for (const e of visiveis()) if (!sim.selecionadas.includes(e.id)) sim.selecionadas.push(e.id);
-    montarCorpo(); pintarTotais();
-  };
-  id("btNenhuma").onclick = ()=>{
-    const fora = new Set(visiveis().map(e=>e.id));
-    sim.selecionadas = sim.selecionadas.filter(x=>!fora.has(x));
-    montarCorpo(); pintarTotais();
-  };
-
-  montarCorpo();
-  pintarTotais();
 }
 
 /* ===================================================================
