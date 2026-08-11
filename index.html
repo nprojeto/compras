@@ -1185,7 +1185,6 @@ async function telaEscolas(alvo){
         <div class="barra-acoes">
           <input id="fBusca" placeholder="${t("buscar")}" value="${esc(estado.dados.busca||"")}" style="width:220px">
           ${podeCadastrar?`<button class="btn" id="btNova">${t("novaEscola")}</button>`:""}
-          ${admin?`<button class="btn neutro" id="btKits">${t("tabelaKits")}</button>`:""}
         </div>
       </div>
       ${r.escolas.length===0 ? `<div class="cartao vazio"><h3>${t("semEscolas")}</h3></div>` : `
@@ -1211,7 +1210,6 @@ async function telaEscolas(alvo){
       });
     }
     if (admin){
-      id("btKits").onclick = ()=>irPara("kits");
       alvo.querySelectorAll("[data-excluir]").forEach(b=> b.onclick = async ()=>{
         if(!confirm(t("excluirConfirma"))) return;
         try{ await api("escolas.remover", { id:b.dataset.excluir }); torrada(t("salvo"),"ok"); desenhar(); }
