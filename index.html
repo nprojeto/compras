@@ -252,9 +252,17 @@ const IDIOMAS = {
     percentuaisGlobais:"Percentuais do negocio",
     percentualImposto:"% de imposto", percentualSocio:"% do parceiro socio",
     margemLucro:"% de margem de lucro", percentualGasto:"% liberado para gasto",
-    percentualGastoNota:"O que sobra depois de imposto, parceiro socio e margem. Ele preenche sozinho o limite de cada escola nova.",
-    percentualSoma:"Imposto + socio + margem nao pode passar de 100%.",
-    vemDosKits:"Vem dos percentuais cadastrados na tela de Kits.",
+    percentualGastoNota:"Teto de gasto que sustenta a margem. Vale para toda escola sem percentual proprio.",
+    percentualSoma:"Com esses percentuais nao sobra nada para gasto.",
+    vemDosKits:"Deixe em branco ou zero para seguir o percentual da tela de Kits.",
+    padraoKits:"padrao dos Kits",
+    comoCalcula:"Como chega neste numero",
+    passoReceita:"Receita da tabela de kits",
+    passoImposto:"Menos imposto",
+    passoGasto:"Menos gastos (instalacao, parceiro e miscelaneos)",
+    passoLucroBruto:"Lucro bruto",
+    passoSocio:"Menos a parte do parceiro socio",
+    passoMargem:"Margem Novale",
     apsPrevNota:"Obrigatorio. Enquanto nao houver AP instalado, receita e gastos saem daqui.",
     faltaApsPrev:"Informe a quantidade de APs previstos.",
     compraMiscelaneos:"Este parceiro compra os miscelaneos",
@@ -347,9 +355,17 @@ const IDIOMAS = {
     percentuaisGlobais:"Business percentages",
     percentualImposto:"% tax", percentualSocio:"% partner share",
     margemLucro:"% profit margin", percentualGasto:"% released to spend",
-    percentualGastoNota:"What is left after tax, partner share and margin. It pre-fills the limit of every new school.",
-    percentualSoma:"Tax + partner share + margin cannot exceed 100%.",
-    vemDosKits:"Comes from the percentages set on the Kits screen.",
+    percentualGastoNota:"Spending ceiling that sustains the margin. Applies to every school without its own percentage.",
+    percentualSoma:"These percentages leave nothing to spend.",
+    vemDosKits:"Leave blank or zero to follow the percentage from the Kits screen.",
+    padraoKits:"Kits default",
+    comoCalcula:"How this number is reached",
+    passoReceita:"Revenue from the kit table",
+    passoImposto:"Less tax",
+    passoGasto:"Less costs (install, partner and miscellaneous)",
+    passoLucroBruto:"Gross profit",
+    passoSocio:"Less the partner share",
+    passoMargem:"Novale margin",
     apsPrevNota:"Required. Until an AP is installed, revenue and costs come from here.",
     faltaApsPrev:"Enter the number of planned APs.",
     compraMiscelaneos:"This partner buys the miscellaneous",
@@ -794,7 +810,7 @@ async function telaEscolas(alvo){
           ${e.usandoPrevisto?`<br><small style="color:var(--alerta);font-family:Inter,sans-serif">${t("usandoPrevisto")}</small>`:""}</td>
         <td>${e.miscelaneosPor==="nos" ? `<span class="selo azul">${t("miscelaneosNos")}</span>` : `<span class="selo cinza">${t("miscelaneosParceiro")}</span>`}
             <br><small style="color:var(--texto-2)">${esc(e.nomeParceiro||"—")}</small></td>
-        ${admin?`<td class="num mono">${dinheiro(e.receita)}<br><small style="color:var(--texto-2)">${numero(e.percentualLimite,2)}%</small></td>`:""}
+        ${admin?`<td class="num mono">${dinheiro(e.receita)}<br><small style="color:var(--texto-2)">${numero(e.percentualAplicado,2)}%${e.usandoPercentualPadrao?" · "+t("padraoKits"):""}</small></td>`:""}
         <td style="min-width:230px">${barraCapacidade(e)}</td>
         <td class="num mono" style="color:${e.saldo<0?"var(--perigo)":"var(--ok)"}">${dinheiro(e.saldo)}</td>
         <td><div class="barra-acoes">
@@ -861,7 +877,13 @@ async function telaKits(alvo){
     socio: Number(tabela.percentualSocio)||0,
     margem: Number(tabela.margemLucro)||0,
   };
-  const sobra = ()=> Math.round(Math.max(0, 100 - pct.imposto - pct.socio - pct.margem)*100)/100;
+  /* G = R * (1 - i - m/(1-s)) — mesma conta do backend. */
+  const sobra = ()=>{
+    const i = pct.imposto/100;
+    const so = Math.min(0.999, Math.max(0, pct.socio/100));
+    const m = pct.margem/100;
+    return Math.round(Math.max(0, Math.min(100, (1 - i - m/(1-so))*100))*100)/100;
+  };
 
   alvo.innerHTML = `
     <div class="cabeca">
@@ -903,6 +925,10 @@ async function telaKits(alvo){
             <div class="valor" id="kSobra">${numero(sobra(),2)}%</div>
             <div class="nota">${t("percentualGastoNota")}</div></div>
           <div id="kAvisoSoma" style="margin-top:10px"></div>
+          <div style="margin-top:14px">
+            <h4 style="font-family:Archivo,sans-serif;font-size:13px;margin-bottom:8px">${t("comoCalcula")}</h4>
+            <table style="font-size:12.5px"><tbody id="kDemonstracao"></tbody></table>
+          </div>
         </div>
       </div>
     </div>`;
@@ -941,10 +967,29 @@ async function telaKits(alvo){
     pct.imposto = Number(id("kImposto").value)||0;
     pct.socio = Number(id("kSocio").value)||0;
     pct.margem = Number(id("kMargem").value)||0;
-    const total = pct.imposto + pct.socio + pct.margem;
-    id("kSobra").textContent = numero(sobra(),2)+"%";
-    id("kAvisoSoma").innerHTML = total > 100
+    const teto = sobra();
+    id("kSobra").textContent = numero(teto,2)+"%";
+    id("kAvisoSoma").innerHTML = teto <= 0
       ? `<div class="aviso perigo">${t("percentualSoma")}</div>` : "";
+
+    // Demonstracao sobre uma receita de R$ 100,00, para ficar legivel.
+    const R = 100;
+    const imposto = R*pct.imposto/100;
+    const gasto = R*teto/100;
+    const bruto = R - imposto - gasto;
+    const socio = bruto*pct.socio/100;
+    id("kDemonstracao").innerHTML = [
+      [t("passoReceita"), R, ""],
+      [t("passoImposto"), -imposto, numero(pct.imposto,2)+"%"],
+      [t("passoGasto"), -gasto, numero(teto,2)+"%"],
+      [t("passoLucroBruto"), bruto, "", true],
+      [t("passoSocio"), -socio, numero(pct.socio,2)+"%"],
+      [t("passoMargem"), bruto-socio, numero(pct.margem,2)+"%", true],
+    ].map(([rot,v,pc,forte])=>`<tr>
+        <td style="padding:4px 0">${forte?`<b>${rot}</b>`:rot}</td>
+        <td class="num mono" style="padding:4px 8px;color:var(--texto-3)">${pc||""}</td>
+        <td class="num mono" style="padding:4px 0">${forte?`<b>${dinheiro(v)}</b>`:dinheiro(v)}</td>
+      </tr>`).join("");
   }
   ["kImposto","kSocio","kMargem"].forEach(c=> id(c).addEventListener("input", atualizarSobra));
   atualizarSobra();
@@ -1008,7 +1053,8 @@ async function telaEscolaForm(alvo){
         ${ehAdmin?`
         <div class="campo"><label for="cPercentual">${t("percentualLimite")}</label>
           <input id="cPercentual" type="number" step="0.01" min="0" max="100"
-            value="${e.percentualLimite ?? (estado.kits ? (Number(estado.kits.percentualGasto)||0) : 0)}">
+            placeholder="${estado.kits ? numero(Number(estado.kits.percentualGasto)||0,2) : "0"}"
+            value="${e.percentualLimite ? e.percentualLimite : ""}">
           <small style="color:var(--texto-3)">${t("vemDosKits")}</small></div>`:""}
       </div>
       ${ehAdmin?`<div id="previa" class="aviso info" style="margin:6px 0 16px"></div>`:""}
@@ -1103,7 +1149,7 @@ async function telaEscolaDetalhe(alvo){
       <div class="grade g4" style="margin-bottom:16px">
         ${admin?`<div class="indicador"><div class="rotulo">${t("receita")}</div>
           <div class="valor">${dinheiro(e.receita)}</div>
-          <div class="nota">${numero(e.percentualLimite,2)}% ${idioma==="pt-BR"?"liberado":"released"}</div></div>`:""}
+          <div class="nota">${numero(e.percentualAplicado,2)}% ${idioma==="pt-BR"?"liberado":"released"}${e.usandoPercentualPadrao?" · "+t("padraoKits"):""}</div></div>`:""}
         <div class="indicador"><div class="rotulo">${t("limite")}</div><div class="valor">${dinheiro(e.limite)}</div></div>
         <div class="indicador"><div class="rotulo">${t("gastoInstalacao")}</div><div class="valor">${dinheiro(e.gastoInstalacao)}</div></div>
         <div class="indicador"><div class="rotulo">${t("gastoPedidos")}</div><div class="valor">${dinheiro(e.gastoPedidos)}</div></div>
