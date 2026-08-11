@@ -177,8 +177,11 @@ td.num,th.num{text-align:right}
 
 /* ---------- aviso flutuante ---------- */
 #torradeira{position:fixed;right:18px;bottom:18px;z-index:80;display:flex;flex-direction:column;gap:8px}
-.torrada{background:var(--tinta);color:#fff;padding:11px 15px;border-radius:9px;font-size:13.5px;max-width:380px;box-shadow:0 10px 30px rgba(16,28,46,.3)}
-.torrada.erro{background:var(--perigo)} .torrada.ok{background:var(--ok)}
+.torrada{background:var(--tinta);color:#fff;padding:11px 15px;border-radius:9px;font-size:13.5px;max-width:420px;box-shadow:0 10px 30px rgba(16,28,46,.3);user-select:text}
+.torrada.ok{background:var(--ok)}
+.torrada.erro{background:var(--perigo);cursor:pointer;padding-right:34px;position:relative}
+.torrada.erro::after{content:"×";position:absolute;right:12px;top:9px;font-size:17px;opacity:.8}
+.torrada.erro small{display:block;opacity:.85;font-family:"IBM Plex Mono",monospace;font-size:11px;margin-top:5px}
 
 .pedido-grade{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:14px;align-items:start}
 @media(max-width:1080px){.pedido-grade{grid-template-columns:1fr}}
@@ -422,12 +425,24 @@ function formatarMoeda(campo){
 }
 function moedaVal(x){ const e = id(x); return e ? deMoeda(e.value) : 0; }
 
-function torrada(texto, tipo){
+/* Aviso de erro NAO some sozinho: fica ate o clique, para dar tempo de ler
+   e copiar a mensagem. Aviso de sucesso continua sumindo em 5 segundos. */
+function torrada(texto, tipo, codigo){
   const d=document.createElement("div");
   d.className="torrada "+(tipo||"");
   d.textContent=texto;
+  if (tipo==="erro" && codigo){
+    const s=document.createElement("small");
+    s.textContent="codigo "+codigo;
+    d.appendChild(s);
+  }
   id("torradeira").appendChild(d);
-  setTimeout(()=>d.remove(), 5200);
+  if (tipo==="erro"){
+    console.error("[gasto-inep]", texto, codigo||"");
+    d.onclick=()=>d.remove();
+  } else {
+    setTimeout(()=>d.remove(), 5200);
+  }
 }
 
 /* ===================================================================
@@ -452,7 +467,9 @@ async function api(acao, dados){
   try{ corpo = await resposta.json(); }catch(e){ throw new Error("Resposta invalida do servidor."); }
   if (!corpo.ok){
     if (resposta.status === 401){ encerrarLocal(); desenhar(); }
-    throw new Error(corpo.erro || "Erro inesperado.");
+    const falha = new Error(corpo.erro || "Erro inesperado.");
+    falha.codigo = corpo.codigo || "";
+    throw falha;
   }
   return corpo.dados;
 }
@@ -574,7 +591,7 @@ function telaLogin(alvo){
       estado.tela = r.usuario.precisaTrocarSenha ? "trocarSenha" : "painel";
       desenhar();
     }catch(e){
-      torrada(e.message, "erro"); b.disabled=false; b.textContent=t("entrar");
+      torrada(e.message, "erro", e.codigo); b.disabled=false; b.textContent=t("entrar");
     }
   };
   id("btEntrar").onclick = enviar;
@@ -612,7 +629,7 @@ function telaTrocarSenha(alvo){
       estado.usuario.precisaTrocarSenha = false;
       torrada(t("senhaTrocada"), "ok");
       irPara("painel");
-    }catch(e){ torrada(e.message, "erro"); }
+    }catch(e){ torrada(e.message, "erro", e.codigo); }
   };
 }
 
@@ -784,7 +801,7 @@ async function telaEscolas(alvo){
       alvo.querySelectorAll("[data-excluir]").forEach(b=> b.onclick = async ()=>{
         if(!confirm(t("excluirConfirma"))) return;
         try{ await api("escolas.remover", { id:b.dataset.excluir }); torrada(t("salvo"),"ok"); desenhar(); }
-        catch(err){ torrada(err.message,"erro"); }
+        catch(err){ torrada(err.message,"erro",err.codigo); }
       });
     }
   }catch(e){ alvo.innerHTML = `<div class="aviso perigo">${esc(e.message)}</div>`; }
@@ -864,7 +881,7 @@ async function telaKits(alvo){
       await carregarKits(true);
       torrada(t("salvo"), "ok");
       desenhar();
-    }catch(e){ torrada(e.message, "erro"); }
+    }catch(e){ torrada(e.message, "erro", e.codigo); }
   };
 
   montar();
@@ -971,7 +988,7 @@ async function telaEscolaForm(alvo){
         percentualLimite: ehAdmin ? numVal("cPercentual") : 0,
       });
       torrada(t("salvo"),"ok"); irPara(voltar);
-    }catch(err){ torrada(err.message,"erro"); }
+    }catch(err){ torrada(err.message,"erro",err.codigo); }
   };
 }
 
@@ -1255,7 +1272,7 @@ async function telaParceiros(alvo){
     alvo.querySelectorAll("[data-excluir]").forEach(bt=> bt.onclick = async ()=>{
       if(!confirm(t("excluirConfirma"))) return;
       try{ await api("parceiros.remover", { id:bt.dataset.excluir }); torrada(t("salvo"),"ok"); desenhar(); }
-      catch(err){ torrada(err.message,"erro"); }
+      catch(err){ torrada(err.message,"erro",err.codigo); }
     });
   }catch(e){ alvo.innerHTML = `<div class="aviso perigo">${esc(e.message)}</div>`; }
 }
@@ -1293,14 +1310,16 @@ function modalParceiro(x){
       <option value="0" ${!x.ativo?"selected":""}>${t("inativo")}</option></select></div>`}
   `, [{ texto:t("salvar"), classe:"btn", acao: async ()=>{
       try{
-        await api("parceiros.salvar", {
+        const resposta = await api("parceiros.salvar", {
           id: x?x.id:"", nome: val("paNome"), documento: val("paDoc"), contato: val("paContato"),
           email: val("paEmail"), telefone: val("paTel"), observacao: val("paObs"),
           compraMiscelaneos: id("paMisc").checked, custos,
           ativo: novo ? true : val("paAtivo")==="1",
         });
-        fecharModal(); torrada(t("salvo"),"ok"); desenhar();
-      }catch(e){ torrada(e.message,"erro"); }
+        fecharModal();
+        torrada(`${t("salvo")} ${resposta.custosGravados ?? 0} ${t("custosParceiro").toLowerCase()}.`, "ok");
+        desenhar();
+      }catch(e){ torrada(e.message,"erro",e.codigo); }
     }}]);
 
   function montarCustos(){
@@ -1364,7 +1383,7 @@ async function telaUsuarios(alvo){
     alvo.querySelectorAll("[data-reset]").forEach(b=> b.onclick = async ()=>{
       if(!confirm(t("resetarConfirma"))) return;
       try{ await api("usuarios.resetarSenha", { id:b.dataset.reset, novaSenha:"Mudar@123" }); torrada(t("salvo"),"ok"); }
-      catch(err){ torrada(err.message,"erro"); }
+      catch(err){ torrada(err.message,"erro",err.codigo); }
     });
   }catch(e){ alvo.innerHTML = `<div class="aviso perigo">${esc(e.message)}</div>`; }
 }
@@ -1392,7 +1411,7 @@ function modalUsuario(u){
           ativo: novo ? true : val("uAtivo")==="1",
         });
         fecharModal(); torrada(t("salvo"),"ok"); desenhar();
-      }catch(e){ torrada(e.message,"erro"); }
+      }catch(e){ torrada(e.message,"erro",e.codigo); }
     }}]);
 }
 
@@ -1680,7 +1699,7 @@ async function telaPedidoForm(alvo){
       estado.rascunho = null;
       torrada(t("salvo"), "ok");
       irPara("pedidoDetalhe", { id: r.id });
-    }catch(e){ torrada(e.message, "erro"); }
+    }catch(e){ torrada(e.message, "erro", e.codigo); }
   }
 
   // ---------------------------------------------------------------- ligacoes
@@ -1804,7 +1823,7 @@ async function telaPedidoDetalhe(alvo){
       try{
         await api("pedidos.decidir", { id:p.id, decisao, observacao:obs });
         torrada(t("salvo"),"ok"); desenhar();
-      }catch(e){ torrada(e.message,"erro"); }
+      }catch(e){ torrada(e.message,"erro",e.codigo); }
     });
   }catch(e){ alvo.innerHTML = `<div class="aviso perigo">${esc(e.message)}</div>`; }
 }
