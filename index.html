@@ -252,6 +252,10 @@ const IDIOMAS = {
     pedidosDoInep:"Pedidos de compra atribuidos", semPedidosInep:"Nenhum pedido atribuido a este INEP ainda.",
     rateioNoPedido:"Coube a este INEP", ondeAplica:"Base",
     quantidade:"Quantidade", subtotal:"Subtotal",
+    parceiroSemCustos:"Este parceiro nao tem custos cadastrados.",
+    parceiroCompra:"Miscelaneos por conta do parceiro.",
+    parceiroNaoCompra:"Miscelaneos comprados por nos.",
+    escolhaParceiro:"Escolha o parceiro: os valores por AP, por rack e a regra de miscelaneos vem do cadastro dele.",
     perfilAdmin:"Administrador", perfilFinanceiro:"Financeiro", perfilComprador:"Comprador",
     salvar:"Salvar", cancelar:"Cancelar", editar:"Editar", excluir:"Excluir", voltar:"Voltar",
     buscar:"Buscar", nenhumResultado:"Nada encontrado",
@@ -332,6 +336,10 @@ const IDIOMAS = {
     pedidosDoInep:"Purchase orders assigned", semPedidosInep:"No orders assigned to this INEP yet.",
     rateioNoPedido:"This INEP's share", ondeAplica:"Basis",
     quantidade:"Quantity", subtotal:"Subtotal",
+    parceiroSemCustos:"This partner has no costs registered.",
+    parceiroCompra:"Miscellaneous bought by the partner.",
+    parceiroNaoCompra:"Miscellaneous bought by us.",
+    escolhaParceiro:"Pick the partner: per-AP and per-rack values and the miscellaneous rule come from their record.",
     perfilAdmin:"Administrator", perfilFinanceiro:"Finance", perfilComprador:"Buyer",
     salvar:"Save", cancelar:"Cancel", editar:"Edit", excluir:"Delete", voltar:"Back",
     buscar:"Search", nenhumResultado:"Nothing found",
@@ -892,28 +900,17 @@ async function telaEscolaForm(alvo){
         <div class="campo"><label for="cPrioridade">${t("prioridade")}</label>
           <select id="cPrioridade">${["Alta","Media","Baixa"]
             .map(s=>`<option ${e.prioridade===s?"selected":""}>${s}</option>`).join("")}</select></div>
-        <div class="campo"><label for="cParceiro">${t("parceiro")}</label>
+        <div class="campo" style="grid-column:span 2"><label for="cParceiro">${t("parceiro")}</label>
           <select id="cParceiro">
             <option value="">${t("semParceiro")}</option>
             ${parceiros.map(x=>`<option value="${x.id}" ${e.parceiroId===x.id?"selected":""}>${esc(x.nome)}${x.ativo?"":" (inativo)"}</option>`).join("")}
           </select>
-          ${parceiros.length===0?`<small style="color:var(--alerta)">${t("cadastreParceiro")}</small>`:""}</div>
+          <small style="color:var(--texto-3)" id="cParceiroNota">${parceiros.length===0?t("cadastreParceiro"):t("escolhaParceiro")}</small></div>
         <div class="campo"><label for="cApsPrev">${t("apsPrev")}</label><input id="cApsPrev" type="number" min="0" value="${e.qtdApsPrev??0}"></div>
         <div class="campo"><label for="cApsInst">${t("apsInst")}</label><input id="cApsInst" type="number" min="0" value="${e.qtdApsInst??0}"></div>
         <div class="campo"><label for="cRacks">${t("racks")}</label><input id="cRacks" type="number" min="0" value="${e.qtdRacks??1}"></div>
         ${ehAdmin?`
-        <div class="campo"><label for="cValorAp">${t("valorPorAp")}</label><input id="cValorAp" class="num" inputmode="numeric" value="${dinheiro(e.valorPorAp||0)}"></div>
-        <div class="campo"><label for="cValorRack">${t("valorPorRack")}</label><input id="cValorRack" class="num" inputmode="numeric" value="${dinheiro(e.valorPorRack||0)}"></div>
         <div class="campo"><label for="cPercentual">${t("percentualLimite")}</label><input id="cPercentual" type="number" step="0.01" min="0" max="100" value="${e.percentualLimite??0}"></div>`:""}
-        <div class="campo"><label for="cMisc">${t("miscelaneos")}</label>
-          <select id="cMisc">
-            <option value="nos" ${e.miscelaneosPor==="parceiro"?"":"selected"}>${t("miscelaneosNos")}</option>
-            <option value="parceiro" ${e.miscelaneosPor==="parceiro"?"selected":""}>${t("miscelaneosParceiro")}</option>
-          </select>
-          <small style="color:var(--texto-3)" id="cMiscNota"></small></div>
-        <div class="campo"><label for="cAtivo">${t("ativo")}</label>
-          <select id="cAtivo"><option value="1" ${e.ativo===false?"":"selected"}>${t("ativo")}</option>
-          <option value="0" ${e.ativo===false?"selected":""}>${t("inativo")}</option></select></div>
       </div>
       ${ehAdmin?`<div id="previa" class="aviso info" style="margin:6px 0 16px"></div>`:""}
       <div class="barra-acoes">
@@ -933,33 +930,31 @@ async function telaEscolaForm(alvo){
       const q = c.tipo==="ap" ? aps : c.tipo==="rack" ? racks : 1;
       return soma + (Number(c.valor)||0)*q;
     }, 0);
-    const daEscola = moedaVal("cValorAp")*aps + moedaVal("cValorRack")*racks;
-    const inst = daEscola + doParceiro;
     id("previa").innerHTML = `<b>${t("receita")}:</b> ${dinheiro(receita)} &nbsp;·&nbsp;
       <b>${t("limite")}:</b> ${dinheiro(limite)} &nbsp;·&nbsp;
       <b>${t("gastoParceiro")}:</b> ${dinheiro(doParceiro)} &nbsp;·&nbsp;
-      <b>${t("gastoEscola")}:</b> ${dinheiro(daEscola)} &nbsp;·&nbsp;
-      <b>${idioma==="pt-BR"?"Sobra para miscelaneos":"Left for miscellaneous"}:</b> ${dinheiro(limite-inst)}`;
+      <b>${idioma==="pt-BR"?"Sobra para miscelaneos":"Left for miscellaneous"}:</b> ${dinheiro(limite-doParceiro)}`;
   };
-  // Quem compra miscelaneos vem do cadastro do parceiro.
+  // Valores por AP, por rack e a regra de miscelaneos vem do parceiro.
   function seguirParceiro(){
     const escolhido = parceiros.find(x=>x.id===val("cParceiro"));
-    const campo = id("cMisc");
-    if (escolhido){
-      campo.value = escolhido.compraMiscelaneos ? "parceiro" : "nos";
-      campo.disabled = true;
-      id("cMiscNota").textContent = `${t("parceiro")}: ${escolhido.nome}`;
-    } else {
-      campo.disabled = false;
-      id("cMiscNota").textContent = "";
+    const nota = id("cParceiroNota");
+    if (!escolhido){
+      nota.textContent = parceiros.length===0 ? t("cadastreParceiro") : t("escolhaParceiro");
+      previa();
+      return;
     }
+    const linhas = escolhido.custos || [];
+    const regra = escolhido.compraMiscelaneos ? t("parceiroCompra") : t("parceiroNaoCompra");
+    nota.textContent = linhas.length===0
+      ? `${regra} ${t("parceiroSemCustos")}`
+      : `${regra} ${linhas.length} ${t("custosParceiro").toLowerCase()}.`;
     previa();
   }
   id("cParceiro").addEventListener("change", seguirParceiro);
   seguirParceiro();
 
   if (ehAdmin){
-    ["cValorAp","cValorRack"].forEach(c=> id(c).addEventListener("input", ()=>{ formatarMoeda(id(c)); previa(); }));
     ["cApsInst","cPercentual","cRacks"].forEach(c=> id(c).addEventListener("input", previa));
   }
   previa();
@@ -972,12 +967,8 @@ async function telaEscolaForm(alvo){
         id: e.id || "", inep: val("cInep"), escola: val("cEscola"), cidade: val("cCidade"),
         uf: val("cUf"), projeto: val("cProjeto"), status: val("cStatus"), prioridade: val("cPrioridade"),
         qtdApsPrev: numVal("cApsPrev"), qtdApsInst: numVal("cApsInst"), parceiroId: val("cParceiro"),
-        valorPorAp: ehAdmin ? moedaVal("cValorAp") : 0,
-        valorPorRack: ehAdmin ? moedaVal("cValorRack") : 0,
         qtdRacks: numVal("cRacks"),
-        miscelaneosPor: val("cMisc"),
         percentualLimite: ehAdmin ? numVal("cPercentual") : 0,
-        ativo: val("cAtivo")==="1",
       });
       torrada(t("salvo"),"ok"); irPara(voltar);
     }catch(err){ torrada(err.message,"erro"); }
@@ -1036,9 +1027,7 @@ async function telaEscolaDetalhe(alvo){
               <td class="num mono">${dinheiro(c.valor)}</td>
               <td class="num mono">${numero(c.quantidade)}</td>
               <td class="num mono">${dinheiro(c.total)}</td></tr>`).join("")}
-            ${e.gastoEscola>0?`<tr><td>${t("gastoEscola")}</td><td>${t("parceiro")}</td>
-              <td class="num mono">—</td><td class="num mono">—</td>
-              <td class="num mono">${dinheiro(e.gastoEscola)}</td></tr>`:""}
+            ${(e.detalheParceiro||[]).length===0?`<tr><td colspan="5" style="color:var(--texto-2)">${t("parceiroSemCustos")}</td></tr>`:""}
             <tr><td colspan="4" style="text-align:right"><b>${t("gastoInstalacao")}</b></td>
               <td class="num mono"><b>${dinheiro(e.gastoInstalacao)}</b></td></tr>
           </tbody>
@@ -1115,8 +1104,7 @@ async function telaSimulacao(alvo){
         const q = c.tipo==="ap" ? aps : c.tipo==="rack" ? racks : 1;
         return soma + (Number(c.valor)||0)*q;
       }, 0);
-      const inst = (Number(e.valorPorAp)||0)*aps + (Number(e.valorPorRack)||0)*racks + doParceiro;
-      const g = inst + (Number(e.gastoPedidos)||0);
+      const g = doParceiro + (Number(e.gastoPedidos)||0);
       const dentro = sim.selecionadas.includes(e.id);
       if (dentro){ receita += r; gastos += g; }
       return { e, aps, receita:r, gastos:g, dentro };
