@@ -256,6 +256,10 @@ const IDIOMAS = {
     percentualSoma:"Com esses percentuais nao sobra nada para gasto.",
     vemDosKits:"Deixe em branco ou zero para seguir o percentual da tela de Kits.",
     padraoKits:"padrao dos Kits",
+    todosStatus:"Todos os status", todosParceiros:"Todos os parceiros",
+    buscarInep:"Buscar INEP, escola ou cidade", semParceiroFiltro:"Sem parceiro",
+    marcarVisiveis:"Marcar visiveis", desmarcarVisiveis:"Desmarcar visiveis",
+    visiveis:"visiveis", limparFiltros:"Limpar filtros", nenhumFiltro:"Nada bate com o filtro.",
     comoCalcula:"Como chega neste numero",
     passoReceita:"Receita da tabela de kits",
     passoImposto:"Menos imposto",
@@ -359,6 +363,10 @@ const IDIOMAS = {
     percentualSoma:"These percentages leave nothing to spend.",
     vemDosKits:"Leave blank or zero to follow the percentage from the Kits screen.",
     padraoKits:"Kits default",
+    todosStatus:"All statuses", todosParceiros:"All partners",
+    buscarInep:"Search INEP, school or city", semParceiroFiltro:"No partner",
+    marcarVisiveis:"Select visible", desmarcarVisiveis:"Clear visible",
+    visiveis:"visible", limparFiltros:"Clear filters", nenhumFiltro:"Nothing matches the filter.",
     comoCalcula:"How this number is reached",
     passoReceita:"Revenue from the kit table",
     passoImposto:"Less tax",
@@ -1244,6 +1252,23 @@ async function telaSimulacao(alvo){
 
   const apsDe = (e)=> sim.aps[e.id] !== undefined ? sim.aps[e.id] : (Number(e.apsBase)||0);
 
+  // Filtros so mudam o que aparece na tabela. Quem entra na conta e a marcacao.
+  if (!sim.filtros) sim.filtros = { busca:"", status:"", parceiro:"" };
+  const filtros = sim.filtros;
+
+  const parceirosDaLista = [...new Set(escolas.map(e=>e.nomeParceiro).filter(Boolean))].sort();
+
+  function visiveis(){
+    const busca = (filtros.busca||"").toLowerCase();
+    return escolas.filter(e=>{
+      if (filtros.status && e.status !== filtros.status) return false;
+      if (filtros.parceiro === "__sem__" && e.nomeParceiro) return false;
+      if (filtros.parceiro && filtros.parceiro !== "__sem__" && e.nomeParceiro !== filtros.parceiro) return false;
+      if (busca && !`${e.inep} ${e.escola} ${e.cidade} ${e.uf}`.toLowerCase().includes(busca)) return false;
+      return true;
+    });
+  }
+
   function contas(){
     let receita = 0, gastos = 0;
     const linhas = escolas.map(e=>{
@@ -1282,11 +1307,32 @@ async function telaSimulacao(alvo){
           <input id="sSocio" type="number" step="0.01" min="0" max="100" class="num" value="${sim.socio}"></div>
         <div class="campo" style="margin:0"><label>&nbsp;</label>
           <div class="barra-acoes">
-            <button class="btn neutro pequeno" id="btTodas">${t("selecionarTodas")}</button>
-            <button class="btn neutro pequeno" id="btNenhuma">${t("limparSelecao")}</button>
+            <button class="btn neutro pequeno" id="btTodas">${t("marcarVisiveis")}</button>
+            <button class="btn neutro pequeno" id="btNenhuma">${t("desmarcarVisiveis")}</button>
           </div></div>
         <div class="campo" style="margin:0"><label>&nbsp;</label>
           <div class="mono" id="simContagem" style="padding-top:9px;color:var(--texto-2)"></div></div>
+      </div>
+
+      <hr style="border:0;border-top:1px solid var(--linha);margin:14px 0">
+
+      <div class="grade g4">
+        <div class="campo" style="margin:0;grid-column:span 2"><label for="fSimBusca">${t("buscar")}</label>
+          <input id="fSimBusca" placeholder="${t("buscarInep")}" value="${esc(filtros.busca)}"></div>
+        <div class="campo" style="margin:0"><label for="fSimStatus">${t("status")}</label>
+          <select id="fSimStatus">
+            <option value="">${t("todosStatus")}</option>
+            ${STATUS_ESCOLA.map(x=>`<option value="${x}" ${filtros.status===x?"selected":""}>${x}</option>`).join("")}
+          </select></div>
+        <div class="campo" style="margin:0"><label for="fSimParceiro">${t("parceiro")}</label>
+          <select id="fSimParceiro">
+            <option value="">${t("todosParceiros")}</option>
+            <option value="__sem__" ${filtros.parceiro==="__sem__"?"selected":""}>${t("semParceiroFiltro")}</option>
+            ${parceirosDaLista.map(x=>`<option value="${esc(x)}" ${filtros.parceiro===x?"selected":""}>${esc(x)}</option>`).join("")}
+          </select></div>
+      </div>
+      <div class="barra-acoes" style="margin-top:10px">
+        <button class="btn neutro pequeno" id="btLimparFiltros">${t("limparFiltros")}</button>
       </div>
     </div>
 
@@ -1305,7 +1351,10 @@ async function telaSimulacao(alvo){
 
   function pintarTotais(){
     const c = contas();
-    id("simContagem").textContent = `${sim.selecionadas.length} / ${escolas.length} ${t("selecionadas")}`;
+    const qtdVisiveis = visiveis().length;
+    id("simContagem").textContent =
+      `${sim.selecionadas.length} / ${escolas.length} ${t("selecionadas")}`
+      + (qtdVisiveis !== escolas.length ? ` · ${qtdVisiveis} ${t("visiveis")}` : "");
     id("simTotais").innerHTML = `
       <div class="indicador"><div class="rotulo">${t("totalRecebido")}</div>
         <div class="valor">${dinheiro(c.receita)}</div></div>
@@ -1337,34 +1386,62 @@ async function telaSimulacao(alvo){
   }
 
   const corpo = id("simCorpo");
-  corpo.innerHTML = escolas.map(e=>`
-    <tr id="simTr${e.id}">
-      <td><input type="checkbox" data-sim="${e.id}" ${sim.selecionadas.includes(e.id)?"checked":""}
-        aria-label="${esc(e.escola)}" style="width:16px;height:16px"></td>
-      <td class="mono">${esc(e.inep)}</td>
-      <td><b>${esc(e.escola)}</b><br><small style="color:var(--texto-2)">${esc(e.cidade)}${e.uf?"/"+esc(e.uf):""} · ${esc(e.nomeParceiro||"—")}</small></td>
-      <td class="num"><input type="number" min="0" class="num" style="width:82px;text-align:right"
-        value="${apsDe(e)}" data-aps="${e.id}"></td>
-      <td class="num mono" id="simR${e.id}"></td>
-      <td class="num mono" id="simG${e.id}"></td>
-      <td class="num mono" id="simL${e.id}"></td>
-    </tr>`).join("");
 
-  corpo.querySelectorAll("[data-sim]").forEach(chk=> chk.onchange = ()=>{
-    const eid = chk.dataset.sim;
-    if (chk.checked){ if(!sim.selecionadas.includes(eid)) sim.selecionadas.push(eid); }
-    else sim.selecionadas = sim.selecionadas.filter(x=>x!==eid);
-    pintarTotais();
-  });
-  corpo.querySelectorAll("[data-aps]").forEach(inp=> inp.addEventListener("input", ()=>{
-    sim.aps[inp.dataset.aps] = Math.max(0, Math.trunc(Number(inp.value)||0));
-    pintarTotais();
-  }));
+  function montarCorpo(){
+    const lista = visiveis();
+    if (lista.length === 0){
+      corpo.innerHTML = `<tr><td colspan="7" class="vazio">${t("nenhumFiltro")}</td></tr>`;
+      return;
+    }
+    corpo.innerHTML = lista.map(e=>`
+      <tr id="simTr${e.id}">
+        <td><input type="checkbox" data-sim="${e.id}" ${sim.selecionadas.includes(e.id)?"checked":""}
+          aria-label="${esc(e.escola)}" style="width:16px;height:16px"></td>
+        <td class="mono">${esc(e.inep)}</td>
+        <td><b>${esc(e.escola)}</b><br><small style="color:var(--texto-2)">${esc(e.cidade)}${e.uf?"/"+esc(e.uf):""} · ${esc(e.nomeParceiro||"—")}</small>
+          <div style="margin-top:4px">${seloEscola(e.status)}</div></td>
+        <td class="num"><input type="number" min="0" class="num" style="width:82px;text-align:right"
+          value="${apsDe(e)}" data-aps="${e.id}"></td>
+        <td class="num mono" id="simR${e.id}"></td>
+        <td class="num mono" id="simG${e.id}"></td>
+        <td class="num mono" id="simL${e.id}"></td>
+      </tr>`).join("");
+
+    corpo.querySelectorAll("[data-sim]").forEach(chk=> chk.onchange = ()=>{
+      const eid = chk.dataset.sim;
+      if (chk.checked){ if(!sim.selecionadas.includes(eid)) sim.selecionadas.push(eid); }
+      else sim.selecionadas = sim.selecionadas.filter(x=>x!==eid);
+      pintarTotais();
+    });
+    corpo.querySelectorAll("[data-aps]").forEach(inp=> inp.addEventListener("input", ()=>{
+      sim.aps[inp.dataset.aps] = Math.max(0, Math.trunc(Number(inp.value)||0));
+      pintarTotais();
+    }));
+  }
+
+  function aplicarFiltros(){ montarCorpo(); pintarTotais(); }
+
+  id("fSimBusca").addEventListener("input", ()=>{ filtros.busca = id("fSimBusca").value; aplicarFiltros(); });
+  id("fSimStatus").addEventListener("change", ()=>{ filtros.status = id("fSimStatus").value; aplicarFiltros(); });
+  id("fSimParceiro").addEventListener("change", ()=>{ filtros.parceiro = id("fSimParceiro").value; aplicarFiltros(); });
+  id("btLimparFiltros").onclick = ()=>{
+    filtros.busca = ""; filtros.status = ""; filtros.parceiro = "";
+    id("fSimBusca").value = ""; id("fSimStatus").value = ""; id("fSimParceiro").value = "";
+    aplicarFiltros();
+  };
   id("sImposto").addEventListener("input", ()=>{ sim.imposto = Number(id("sImposto").value)||0; pintarTotais(); });
   id("sSocio").addEventListener("input", ()=>{ sim.socio = Number(id("sSocio").value)||0; pintarTotais(); });
-  id("btTodas").onclick = ()=>{ sim.selecionadas = todos.slice(); desenhar(); };
-  id("btNenhuma").onclick = ()=>{ sim.selecionadas = []; desenhar(); };
+  id("btTodas").onclick = ()=>{
+    for (const e of visiveis()) if (!sim.selecionadas.includes(e.id)) sim.selecionadas.push(e.id);
+    montarCorpo(); pintarTotais();
+  };
+  id("btNenhuma").onclick = ()=>{
+    const fora = new Set(visiveis().map(e=>e.id));
+    sim.selecionadas = sim.selecionadas.filter(x=>!fora.has(x));
+    montarCorpo(); pintarTotais();
+  };
 
+  montarCorpo();
   pintarTotais();
 }
 
