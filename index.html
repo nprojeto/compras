@@ -558,7 +558,6 @@ function menuDoPerfil(){
   itens.push({ chave:"pedidos", texto:t("pedidos") });
   if (p === "comprador") itens.push({ chave:"parceiros", texto:t("parceiros") });
   if (p === "admin"){
-    itens.push({ chave:"kits", texto:t("kits") });
     itens.push({ chave:"parceiros", texto:t("parceiros") });
     itens.push({ chave:"usuarios", texto:t("usuarios") });
   }
@@ -975,7 +974,11 @@ async function telaPainel(alvo){
         <div class="campo" style="margin:0"><label for="sImposto">${t("imposto")}</label>
           <input id="sImposto" type="number" step="0.01" min="0" max="100" class="num" value="${sim.imposto}"></div>
         <div class="campo" style="margin:0"><label for="sSocio">${t("socio")}</label>
-          <input id="sSocio" type="number" step="0.01" min="0" max="100" class="num" value="${sim.socio}"></div>`:""}
+          <input id="sSocio" type="number" step="0.01" min="0" max="100" class="num" value="${sim.socio}"></div>`:`
+        <div class="campo" style="margin:0"><label>${t("imposto")}</label>
+          <input class="num" value="${numero(kits.percentualImposto||0,2)}" disabled></div>
+        <div class="campo" style="margin:0"><label>${t("socio")}</label>
+          <input class="num" value="${numero(kits.percentualSocio||0,2)}" disabled></div>`}
         <div class="campo" style="margin:0"><label>&nbsp;</label>
           <div class="barra-acoes">
             <button class="btn neutro pequeno" id="btTodas">${t("marcarVisiveis")}</button>
