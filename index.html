@@ -333,6 +333,9 @@ const IDIOMAS = {
     anexoNfQuem:"Anexada pelo comprador", anexoComprovanteQuem:"Anexado pelo financeiro",
     anexar:"Anexar arquivo", maisUm:"Anexar mais um", baixar:"Baixar", removerAnexo:"Remover",
     arquivos:"arquivos", arquivo:"arquivo",
+    dataNf:"Data da NF", dataNfObrigatoria:"Obrigatoria quando o status e Pago.",
+    faltaDataNf:"Informe a data da NF para marcar a escola como paga.",
+    periodoNf:"Periodo da NF", de:"De", ate:"Ate", semDataNf:"Sem data de NF",
     semAnexo:"Ainda sem arquivo", enviandoArquivo:"Enviando...",
     arquivoGrande:"O arquivo passa de 5 MB. Reduza antes de anexar.",
     faltaDocumento:"Falta anexar:", pedidoAguardaDoc:"Aprovado, mas so vira pago quando os dois documentos estiverem no sistema.",
@@ -460,6 +463,9 @@ const IDIOMAS = {
     anexoNfQuem:"Attached by the buyer", anexoComprovanteQuem:"Attached by finance",
     anexar:"Attach file", maisUm:"Attach another", baixar:"Download", removerAnexo:"Remove",
     arquivos:"files", arquivo:"file",
+    dataNf:"Invoice date", dataNfObrigatoria:"Required when the status is Paid.",
+    faltaDataNf:"Enter the invoice date to mark the school as paid.",
+    periodoNf:"Invoice period", de:"From", ate:"To", semDataNf:"No invoice date",
     semAnexo:"No file yet", enviandoArquivo:"Uploading...",
     arquivoGrande:"File is over 5 MB. Shrink it before attaching.",
     faltaDocumento:"Still missing:", pedidoAguardaDoc:"Approved, but it only turns paid once both documents are in the system.",
@@ -776,7 +782,7 @@ function barraCapacidade(e){
    </div>`;
 }
 
-const STATUS_ESCOLA = ["Em andamento","Suspenso","Cancelado","Finalizado"];
+const STATUS_ESCOLA = ["Em andamento","Suspenso","Cancelado","Finalizado","Pago"];
 
 /* Tipos de custo do parceiro. Somente "outro" pede descricao. */
 function tiposCusto(){
@@ -826,7 +832,8 @@ function receitaPorAps(aps){
   return Math.round(Math.max(0, Number(base.valor) + adicional*(n-Number(base.aps)))*100)/100;
 }
 function seloEscola(status){
-  const cor = { "Em andamento":"azul", "Suspenso":"ambar", "Cancelado":"vermelho", "Finalizado":"verde" }[status] || "cinza";
+  const cor = { "Em andamento":"azul", "Suspenso":"ambar", "Cancelado":"vermelho",
+    "Finalizado":"verde", "Pago":"roxo" }[status] || "cinza";
   return `<span class="selo ${cor}">${esc(status)}</span>`;
 }
 
@@ -858,7 +865,9 @@ async function telaPainel(alvo){
   const percentualImposto = Number(kits.percentualImposto)||0;
   const percentualSocio = Number(kits.percentualSocio)||0;
 
-  if (!estado.painel) estado.painel = { busca:"", status:"", parceiro:"", selecionadas:null, kitsAberto:false };
+  if (!estado.painel) estado.painel = {
+    busca:"", status:"", parceiro:"", nfDe:"", nfAte:"", selecionadas:null, kitsAberto:false,
+  };
   const f = estado.painel;
 
   const todos = escolas.map(e=>e.id);
@@ -874,6 +883,9 @@ async function telaPainel(alvo){
       if (f.parceiro === "__sem__" && e.nomeParceiro) return false;
       if (f.parceiro && f.parceiro !== "__sem__" && e.nomeParceiro !== f.parceiro) return false;
       if (busca && !`${e.inep} ${e.escola} ${e.cidade} ${e.uf}`.toLowerCase().includes(busca)) return false;
+      // Periodo da NF: escola sem data fica de fora quando ha recorte.
+      if (f.nfDe && (!e.dataNf || e.dataNf < f.nfDe)) return false;
+      if (f.nfAte && (!e.dataNf || e.dataNf > f.nfAte)) return false;
       return true;
     });
   }
@@ -934,6 +946,15 @@ async function telaPainel(alvo){
       </div>
 
       ${admin?`
+      <div class="grade g4" style="margin-top:14px">
+        <div class="campo" style="margin:0"><label for="fPnNfDe">${t("periodoNf")} — ${t("de")}</label>
+          <input id="fPnNfDe" type="date" value="${esc(f.nfDe)}"></div>
+        <div class="campo" style="margin:0"><label for="fPnNfAte">${t("periodoNf")} — ${t("ate")}</label>
+          <input id="fPnNfAte" type="date" value="${esc(f.nfAte)}"></div>
+        <div class="campo" style="margin:0"></div>
+        <div class="campo" style="margin:0"></div>
+      </div>
+
       <hr style="border:0;border-top:1px solid var(--linha);margin:14px 0">
       <div class="grade g4">
         <div class="campo" style="margin:0"><label>${t("imposto")}</label>
@@ -1081,7 +1102,8 @@ async function telaPainel(alvo){
           aria-label="${esc(e.escola)}" style="width:16px;height:16px"></td>`:""}
         <td class="mono">${esc(e.inep)}</td>
         <td><b>${esc(e.escola)}</b><br><small style="color:var(--texto-2)">${esc(e.cidade)}${e.uf?"/"+esc(e.uf):""} · ${esc(e.nomeParceiro||"—")}</small></td>
-        <td>${seloEscola(e.status)}</td>
+        <td>${seloEscola(e.status)}
+          ${e.dataNf?`<br><small class="mono" style="color:var(--texto-2)">${esc(e.dataNf.split("-").reverse().join("/"))}</small>`:""}</td>
         <td class="num mono">${numero(l.aps)} / ${numero(e.qtdApsPrev)}</td>
         ${admin?`<td class="num mono">${dinheiro(l.receita)}</td>`:""}
         <td class="num mono">${dinheiro(l.gastos)}</td>
@@ -1109,9 +1131,13 @@ async function telaPainel(alvo){
   id("fPnBusca").addEventListener("input", ()=>{ f.busca = id("fPnBusca").value; pintar(); });
   id("fPnStatus").addEventListener("change", ()=>{ f.status = id("fPnStatus").value; pintar(); });
   id("fPnParceiro").addEventListener("change", ()=>{ f.parceiro = id("fPnParceiro").value; pintar(); });
+  if (id("fPnNfDe")) id("fPnNfDe").addEventListener("change", ()=>{ f.nfDe = id("fPnNfDe").value; pintar(); });
+  if (id("fPnNfAte")) id("fPnNfAte").addEventListener("change", ()=>{ f.nfAte = id("fPnNfAte").value; pintar(); });
   id("btPnLimpar").onclick = ()=>{
-    f.busca = ""; f.status = ""; f.parceiro = "";
+    f.busca = ""; f.status = ""; f.parceiro = ""; f.nfDe = ""; f.nfAte = "";
     id("fPnBusca").value = ""; id("fPnStatus").value = ""; id("fPnParceiro").value = "";
+    if (id("fPnNfDe")) id("fPnNfDe").value = "";
+    if (id("fPnNfAte")) id("fPnNfAte").value = "";
     pintar();
   };
   if (id("btTodas")) id("btTodas").onclick = ()=>{
@@ -1142,7 +1168,8 @@ async function telaEscolas(alvo){
       <tr>
         <td class="mono">${esc(e.inep)}</td>
         <td><b>${esc(e.escola)}</b><br><small style="color:var(--texto-2)">${esc(e.cidade)}${e.uf?" / "+esc(e.uf):""} · ${esc(e.projeto||"—")}</small></td>
-        <td>${seloEscola(e.status)}<br><small style="color:var(--texto-2)">${esc(e.prioridade)}</small></td>
+        <td>${seloEscola(e.status)}<br><small style="color:var(--texto-2)">${esc(e.prioridade)}</small>
+          ${e.dataNf?`<br><small class="mono" style="color:var(--texto-2)">${t("dataNf")}: ${esc(e.dataNf.split("-").reverse().join("/"))}</small>`:""}</td>
         <td class="num mono">${numero(e.qtdApsInst)} / ${numero(e.qtdApsPrev)}
           ${e.usandoPrevisto?`<br><small style="color:var(--alerta);font-family:Inter,sans-serif">${t("usandoPrevisto")}</small>`:""}</td>
         <td>${e.miscelaneosPor==="nos" ? `<span class="selo azul">${t("miscelaneosNos")}</span>` : `<span class="selo cinza">${t("miscelaneosParceiro")}</span>`}
@@ -1371,6 +1398,9 @@ async function telaEscolaForm(alvo){
           <select id="cStatus">${STATUS_ESCOLA
             .map(x=>`<option ${(e.status||"Em andamento")===x?"selected":""}>${x}</option>`).join("")}</select>
           <small style="color:var(--texto-3)">${t("statusBloqueado")}</small></div>
+        <div class="campo" id="campoDataNf"><label for="cDataNf">${t("dataNf")}</label>
+          <input id="cDataNf" type="date" value="${esc(e.dataNf||"")}">
+          <small style="color:var(--texto-3)">${t("dataNfObrigatoria")}</small></div>
         <div class="campo"><label for="cPrioridade">${t("prioridade")}</label>
           <select id="cPrioridade">${["Alta","Media","Baixa"]
             .map(s=>`<option ${e.prioridade===s?"selected":""}>${s}</option>`).join("")}</select></div>
@@ -1439,12 +1469,25 @@ async function telaEscolaForm(alvo){
 
   const voltar = estado.dados.voltarPara || "escolas";
   id("btVoltar").onclick = id("btCancelar").onclick = ()=>irPara(voltar);
+  // A data da NF so importa quando a escola esta paga.
+  function seguirStatus(){
+    const pago = val("cStatus") === "Pago";
+    id("campoDataNf").style.opacity = pago ? "1" : ".6";
+    id("cDataNf").required = pago;
+  }
+  id("cStatus").addEventListener("change", seguirStatus);
+  seguirStatus();
+
   id("btSalvar").onclick = async ()=>{
     if (numVal("cApsPrev") <= 0){ torrada(t("faltaApsPrev"), "erro"); id("cApsPrev").focus(); return; }
+    if (val("cStatus") === "Pago" && !val("cDataNf")){
+      torrada(t("faltaDataNf"), "erro"); id("cDataNf").focus(); return;
+    }
     try{
       await api("escolas.salvar", {
         id: e.id || "", inep: val("cInep"), escola: val("cEscola"), cidade: val("cCidade"),
-        uf: val("cUf"), projeto: val("cProjeto"), status: val("cStatus"), prioridade: val("cPrioridade"),
+        uf: val("cUf"), projeto: val("cProjeto"), status: val("cStatus"),
+        dataNf: val("cDataNf"), prioridade: val("cPrioridade"),
         qtdApsPrev: numVal("cApsPrev"), qtdApsInst: numVal("cApsInst"), parceiroId: val("cParceiro"),
         qtdRacks: numVal("cRacks"),
       });
@@ -1472,6 +1515,7 @@ async function telaEscolaDetalhe(alvo){
           <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
             ${seloEscola(e.status)}
             <span class="selo cinza">${numero(e.qtdApsInst)} / ${numero(e.qtdApsPrev)} ${t("aps")}</span>
+            ${e.dataNf?`<span class="selo roxo">${t("dataNf")}: ${esc(e.dataNf.split("-").reverse().join("/"))}</span>`:""}
             ${e.usandoPrevisto?`<span class="selo ambar">${t("usandoPrevisto")}</span>`:""}
             ${e.miscelaneosPor==="nos"?`<span class="selo azul">${t("miscelaneosNos")}</span>`:`<span class="selo cinza">${t("miscelaneosParceiro")}</span>`}
           </div></div>
