@@ -278,7 +278,6 @@ const IDIOMAS = {
     salvarAlteracoes:"Salvar alteracoes",
     editarPago:"Este pedido ja foi pago. A correcao mantem o status de pago e fica registrada no historico.",
     soAdminEditaPago:"Pedido pago: so o administrador pode corrigir.",
-    visaoRealNota:"So o que ja esta instalado. Escola sem AP instalado entra zerada.",
     visaoProjetadaNota:"Usa os APs previstos onde ainda nao ha instalacao.",
     escolasNoRecorte:"escolas no recorte", verEscola:"Abrir",
     comoCalcula:"Como chega neste numero",
@@ -334,6 +333,8 @@ const IDIOMAS = {
     anexar:"Anexar arquivo", maisUm:"Anexar mais um", baixar:"Baixar", removerAnexo:"Remover",
     arquivos:"arquivos", arquivo:"arquivo",
     dataNf:"Data da NF", dataNfObrigatoria:"Obrigatoria quando o status e Pago.",
+    apsBase:"APs no calculo",
+    baseCalculoNota:"Calculado pelos APs instalados; onde ainda nao ha instalacao, pelos previstos.",
     faltaDataNf:"Informe a data da NF para marcar a escola como paga.",
     periodoNf:"Periodo da NF", de:"De", ate:"Ate", semDataNf:"Sem data de NF",
     semAnexo:"Ainda sem arquivo", enviandoArquivo:"Enviando...",
@@ -408,7 +409,6 @@ const IDIOMAS = {
     salvarAlteracoes:"Save changes",
     editarPago:"This order is already paid. The fix keeps the paid status and is recorded in the history.",
     soAdminEditaPago:"Paid order: only the administrator can fix it.",
-    visaoRealNota:"Only what is installed. Schools with no installed AP count as zero.",
     visaoProjetadaNota:"Uses planned APs wherever nothing is installed yet.",
     escolasNoRecorte:"schools in view", verEscola:"Open",
     comoCalcula:"How this number is reached",
@@ -464,6 +464,8 @@ const IDIOMAS = {
     anexar:"Attach file", maisUm:"Attach another", baixar:"Download", removerAnexo:"Remove",
     arquivos:"files", arquivo:"file",
     dataNf:"Invoice date", dataNfObrigatoria:"Required when the status is Paid.",
+    apsBase:"APs in the calculation",
+    baseCalculoNota:"Based on installed APs; where nothing is installed yet, on the planned ones.",
     faltaDataNf:"Enter the invoice date to mark the school as paid.",
     periodoNf:"Invoice period", de:"From", ate:"To", semDataNf:"No invoice date",
     semAnexo:"No file yet", enviandoArquivo:"Uploading...",
@@ -890,13 +892,17 @@ async function telaPainel(alvo){
     });
   }
 
+  /* Base do calculo: APs instalados; se ainda nao ha nenhum, os previstos.
+     Vale para receita, limite e custo do parceiro (o backend ja resolve isso
+     em apsBase / receita / limite / gastoTotal). */
   function linhas(){
     return visiveis().map(e=>({
       e,
-      aps: Number(e.qtdApsInst)||0,
-      receita: Number(e.receitaReal)||0,
-      gastos: Number(e.gastoTotalReal)||0,
-      limite: Number(e.limiteReal)||0,
+      aps: Number(e.apsBase)||0,
+      receita: Number(e.receita)||0,
+      gastos: Number(e.gastoTotal)||0,
+      limite: Number(e.limite)||0,
+      previsto: !!e.usandoPrevisto,
       dentro: f.selecionadas.includes(e.id),
     }));
   }
@@ -925,7 +931,7 @@ async function telaPainel(alvo){
   // -------------------------------------------------------------- esqueleto
   alvo.innerHTML = `
     <div class="cabeca">
-      <div><h1>${t("painel")}</h1><p>${t("visaoRealNota")}</p></div>
+      <div><h1>${t("painel")}</h1><p>${t("baseCalculoNota")}</p></div>
     </div>
 
     <div class="cartao cartao-pad" style="margin-bottom:16px">
@@ -1073,9 +1079,10 @@ async function telaPainel(alvo){
       <div class="indicador"><div class="rotulo">${t("escolasAtivas")}</div>
         <div class="valor">${numero(naConta.length)}</div>
         <div class="nota">${numero(escolas.length)} ${idioma==="pt-BR"?"no total":"in total"}</div></div>
-      <div class="indicador"><div class="rotulo">${t("apsInstalados")}</div>
+      <div class="indicador"><div class="rotulo">${t("apsBase")}</div>
         <div class="valor">${numero(c.aps)}</div>
-        <div class="nota">${numero(naConta.reduce((a,l)=>a+(Number(l.e.qtdApsPrev)||0),0))} ${t("apsPrev").toLowerCase()}</div></div>
+        <div class="nota">${numero(naConta.reduce((a,l)=>a+(Number(l.e.qtdApsInst)||0),0))} ${t("apsInstalados").toLowerCase()} ·
+          ${numero(naConta.reduce((a,l)=>a+(Number(l.e.qtdApsPrev)||0),0))} ${t("apsPrev").toLowerCase()}</div></div>
       <div class="indicador"><div class="rotulo">${t("limite")}</div>
         <div class="valor">${dinheiro(c.limite)}</div>
         <div class="nota">${numero(percentualGasto,2)}% ${t("padraoKits")}</div></div>
@@ -1104,7 +1111,8 @@ async function telaPainel(alvo){
         <td><b>${esc(e.escola)}</b><br><small style="color:var(--texto-2)">${esc(e.cidade)}${e.uf?"/"+esc(e.uf):""} · ${esc(e.nomeParceiro||"—")}</small></td>
         <td>${seloEscola(e.status)}
           ${e.dataNf?`<br><small class="mono" style="color:var(--texto-2)">${esc(e.dataNf.split("-").reverse().join("/"))}</small>`:""}</td>
-        <td class="num mono">${numero(l.aps)} / ${numero(e.qtdApsPrev)}</td>
+        <td class="num mono">${numero(e.qtdApsInst)} / ${numero(e.qtdApsPrev)}
+          ${l.previsto?`<br><small style="color:var(--alerta);font-family:Inter,sans-serif">${t("usandoPrevisto")}</small>`:""}</td>
         ${admin?`<td class="num mono">${dinheiro(l.receita)}</td>`:""}
         <td class="num mono">${dinheiro(l.gastos)}</td>
         <td class="num mono">${dinheiro(l.limite)}</td>
