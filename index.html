@@ -393,6 +393,11 @@ const IDIOMAS = {
     aguardaAssinado:"A ativacao fica disponivel quando o parceiro enviar o contrato assinado.",
     jaAtivo:"Parceiro ativo. Ja pode ser atribuido as escolas.",
     imprimirPdf:"Imprimir / Salvar em PDF",
+    escolherArquivo:"Escolher arquivo", arquivoEscolhido:"Arquivo escolhido",
+    salvarEnvio:"Salvar e enviar", enviadoEm:"Enviado em", enviadoPor:"Enviado por",
+    aguardandoEnvio:"Nenhum arquivo escolhido ainda.",
+    contratoRecebido:"Contrato assinado recebido",
+    confiraAntes:"Abra o PDF e confira a assinatura antes de ativar.",
     passoAguardando:"Recebemos sua solicitacao. Um credenciador vai analisar os dados.",
     passoEmAnalise:"Seus dados estao em analise.",
     passoAssinar:"Contrato disponivel. Baixe, assine e envie o PDF assinado.",
@@ -577,6 +582,11 @@ const IDIOMAS = {
     aguardaAssinado:"Activation unlocks once the partner uploads the signed contract.",
     jaAtivo:"Partner is active and can be assigned to schools.",
     imprimirPdf:"Print / Save as PDF",
+    escolherArquivo:"Choose file", arquivoEscolhido:"File selected",
+    salvarEnvio:"Save and send", enviadoEm:"Sent on", enviadoPor:"Sent by",
+    aguardandoEnvio:"No file chosen yet.",
+    contratoRecebido:"Signed contract received",
+    confiraAntes:"Open the PDF and check the signature before activating.",
     passoAguardando:"We received your request. An officer will review the details.",
     passoEmAnalise:"Your details are under review.",
     passoAssinar:"Contract available. Download, sign and upload the signed PDF.",
@@ -2093,7 +2103,6 @@ async function telaCredenciamentoDetalhe(alvo){
           <div class="barra-acoes" style="margin-top:12px">
             ${cartao?`<button class="btn neutro pequeno" data-baixar="${cartao.id}">${t("cartaoCnpj")} (PDF)</button>`
                     :`<span class="selo ambar">${t("semCartaoCnpj")}</span>`}
-            ${assinado?`<button class="btn neutro pequeno" data-baixar="${assinado.id}">${t("contratoAssinado")} (PDF)</button>`:""}
           </div>
         </div>
 
@@ -2131,8 +2140,19 @@ async function telaCredenciamentoDetalhe(alvo){
 
           <div class="cartao cartao-pad">
             <h3 style="margin-bottom:12px">${t("decisaoCredenciamento")}</h3>
+            ${assinado?`
+            <div class="anexo" style="border-color:var(--ok);margin-bottom:12px">
+              <div class="titulo">
+                <h4>${t("contratoRecebido")}</h4><span class="selo verde">✓</span></div>
+              <div class="arquivo">${esc(assinado.nomeArquivo)}</div>
+              <small style="color:var(--texto-2)">${tamanhoLegivel(assinado.tamanho)} ·
+                ${t("enviadoPor")} ${esc(assinado.usuarioNome)} · ${dataHora(assinado.criadoEm)}</small>
+              <div class="barra-acoes" style="margin-top:10px">
+                <button class="btn" data-baixar="${assinado.id}">${t("baixar")} (PDF)</button>
+              </div>
+            </div>`:""}
             ${p.status === "AGUARDANDO_CONFERENCIA"
-              ? `<div class="aviso info" style="margin-bottom:12px">${t("prontoParaAtivar")}</div>`
+              ? `<div class="aviso info" style="margin-bottom:12px">${t("confiraAntes")}</div>`
               : p.status === "ATIVO"
                 ? `<div class="aviso ok" style="margin-bottom:12px">${t("jaAtivo")}</div>`
                 : `<div class="aviso alerta" style="margin-bottom:12px">${t("aguardaAssinado")}</div>`}
@@ -2273,18 +2293,28 @@ async function telaMeuCredenciamento(alvo){
         <hr style="border:0;border-top:1px solid var(--linha);margin:16px 0">
         <h3 style="margin-bottom:4px">${t("contratoAssinado")}</h3>
         <p style="color:var(--texto-2);font-size:12.5px;margin:0 0 10px">${t("enviarAssinadoNota")}</p>
-        <div class="anexo ${assinado?"":"vazio-arq"}">
-          ${assinado?`
-            <div class="arquivo">${esc(assinado.nomeArquivo)}</div>
-            <small style="color:var(--texto-2)">${tamanhoLegivel(assinado.tamanho)} · ${dataHora(assinado.criadoEm)}</small>`
-          :`<small style="color:var(--texto-2)">${t("semAnexo")}</small>`}
+        ${assinado?`
+        <div class="anexo" style="border-color:var(--ok)">
+          <div class="titulo"><h4>${esc(assinado.nomeArquivo)}</h4><span class="selo verde">✓</span></div>
+          <small style="color:var(--texto-2)">${tamanhoLegivel(assinado.tamanho)} ·
+            ${t("enviadoEm")} ${dataHora(assinado.criadoEm)}</small>
           <div class="barra-acoes" style="margin-top:10px">
-            ${assinado?`<button class="btn neutro pequeno" data-baixar="${assinado.id}">${t("baixar")}</button>`:""}
-            ${p.status!=="ATIVO"?`<button class="btn neutro pequeno" id="btEnviarAssinado">
-              ${assinado?t("trocarArquivo"):t("anexar")}</button>`:""}
+            <button class="btn neutro pequeno" data-baixar="${assinado.id}">${t("baixar")}</button>
+          </div>
+        </div>`:""}
+
+        ${p.status!=="ATIVO"?`
+        <div class="anexo vazio-arq">
+          <div class="barra-acoes" style="margin-bottom:8px">
+            <button class="btn neutro pequeno" id="btEscolherArquivo">
+              ${assinado?t("trocarArquivo"):t("escolherArquivo")}</button>
+          </div>
+          <div id="crNomeArquivo" style="font-size:12.5px;color:var(--texto-2)">${t("aguardandoEnvio")}</div>
+          <div class="barra-acoes" style="margin-top:10px">
+            <button class="btn" id="btSalvarAssinado" disabled>${t("salvarEnvio")}</button>
           </div>
           <input type="file" id="crArquivoAssinado" accept="application/pdf,.pdf" style="display:none">
-        </div>
+        </div>`:""}
       </div>`:""}
 
       <div class="cartao cartao-pad">
@@ -2304,24 +2334,50 @@ async function telaMeuCredenciamento(alvo){
 
     if (id("btBaixarContrato")) id("btBaixarContrato").onclick = ()=>abrirContrato("");
 
-    if (id("btEnviarAssinado")){
+    // Escolher o arquivo apenas mostra o nome; o envio so acontece no Salvar.
+    if (id("btEscolherArquivo")){
       const campo = id("crArquivoAssinado");
-      id("btEnviarAssinado").onclick = ()=> campo.click();
-      campo.onchange = async ()=>{
+      const salvar = id("btSalvarAssinado");
+      let escolhido = null;
+
+      id("btEscolherArquivo").onclick = ()=> campo.click();
+
+      campo.onchange = ()=>{
         const arquivo = campo.files[0];
-        if (!arquivo) return;
+        escolhido = null;
+        salvar.disabled = true;
+        if (!arquivo){ id("crNomeArquivo").textContent = t("aguardandoEnvio"); return; }
         if (arquivo.type !== "application/pdf" && !arquivo.name.toLowerCase().endsWith(".pdf")){
-          torrada(t("somentePdf"), "erro"); campo.value=""; return;
+          torrada(t("somentePdf"), "erro"); campo.value = "";
+          id("crNomeArquivo").textContent = t("aguardandoEnvio"); return;
         }
-        if (arquivo.size > 5*1024*1024){ torrada(t("arquivoGrande"), "erro"); campo.value=""; return; }
+        if (arquivo.size > 5*1024*1024){
+          torrada(t("arquivoGrande"), "erro"); campo.value = "";
+          id("crNomeArquivo").textContent = t("aguardandoEnvio"); return;
+        }
+        escolhido = arquivo;
+        salvar.disabled = false;
+        id("crNomeArquivo").innerHTML =
+          `<b>${t("arquivoEscolhido")}:</b> <span class="mono">${esc(arquivo.name)}</span>
+           · ${tamanhoLegivel(arquivo.size)}`;
+      };
+
+      salvar.onclick = async ()=>{
+        if (!escolhido) return;
+        salvar.disabled = true;
+        salvar.textContent = t("enviandoArquivo");
         try{
           await api("credenciamento.anexar", {
-            tipo: "contratoAssinado", nome: arquivo.name,
-            conteudo: await lerArquivo(arquivo),
+            tipo: "contratoAssinado", nome: escolhido.name,
+            conteudo: await lerArquivo(escolhido),
           });
           torrada(t("salvo"), "ok");
           desenhar();
-        }catch(e){ torrada(e.message, "erro", e.codigo); }
+        }catch(e){
+          torrada(e.message, "erro", e.codigo);
+          salvar.disabled = false;
+          salvar.textContent = t("salvarEnvio");
+        }
       };
     }
 
