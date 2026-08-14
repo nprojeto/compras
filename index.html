@@ -389,6 +389,10 @@ const IDIOMAS = {
     motivoRecusa:"Motivo", motivoNota:"Explique ao parceiro o que precisa mudar.",
     motivoObrigatorio:"Informe o motivo da recusa.",
     permitaPopup:"Libere as janelas pop-up para abrir o contrato.",
+    prontoParaAtivar:"Contrato assinado recebido. Confira o PDF antes de ativar.",
+    aguardaAssinado:"A ativacao fica disponivel quando o parceiro enviar o contrato assinado.",
+    jaAtivo:"Parceiro ativo. Ja pode ser atribuido as escolas.",
+    imprimirPdf:"Imprimir / Salvar em PDF",
     passoAguardando:"Recebemos sua solicitacao. Um credenciador vai analisar os dados.",
     passoEmAnalise:"Seus dados estao em analise.",
     passoAssinar:"Contrato disponivel. Baixe, assine e envie o PDF assinado.",
@@ -569,6 +573,10 @@ const IDIOMAS = {
     motivoRecusa:"Reason", motivoNota:"Tell the partner what needs to change.",
     motivoObrigatorio:"Enter the reason for rejection.",
     permitaPopup:"Allow pop-ups to open the contract.",
+    prontoParaAtivar:"Signed contract received. Check the PDF before activating.",
+    aguardaAssinado:"Activation unlocks once the partner uploads the signed contract.",
+    jaAtivo:"Partner is active and can be assigned to schools.",
+    imprimirPdf:"Print / Save as PDF",
     passoAguardando:"We received your request. An officer will review the details.",
     passoEmAnalise:"Your details are under review.",
     passoAssinar:"Contract available. Download, sign and upload the signed PDF.",
@@ -746,7 +754,6 @@ function menuDoPerfil(){
   // O parceiro so acompanha o proprio credenciamento.
   if (p === "parceiro") return [{ chave:"meuCredenciamento", texto:t("meuCredenciamento") }];
   if (p === "credenciador") return [{ chave:"credenciamentos", texto:t("credenciamentos") }];
-
   const itens = [{ chave:"painel", texto:t("painel") }];
   itens.push({ chave:"escolas", texto:t("escolas") });
   if (p === "comprador") itens.push({ chave:"pedidoNovo", texto:t("novoPedido") });
@@ -826,9 +833,22 @@ function desenhar(){
   id("btIdioma").onclick = ()=>{ idioma = idioma==="pt-BR"?"en":"pt-BR"; guardar("idioma", idioma); desenhar(); };
   id("btSair").onclick = sair;
 
-  const inicial = estado.usuario.perfil === "parceiro" ? telaMeuCredenciamento
-    : estado.usuario.perfil === "credenciador" ? telaCredenciamentos : telaPainel;
-  const tela = TELAS[estado.tela] || inicial;
+  // Cada perfil so alcanca as telas do proprio menu (mais as comuns).
+  const permitidas = new Set([...menuDoPerfil().map(x=>x.chave), "trocarSenha"]);
+  if (estado.usuario.perfil === "admin"){
+    ["escolaForm","escolaDetalhe","pedidoNovo","pedidoDetalhe","kits","credenciamentoDetalhe"]
+      .forEach(x=>permitidas.add(x));
+  } else if (estado.usuario.perfil === "comprador"){
+    ["escolaForm","escolaDetalhe","pedidoNovo","pedidoDetalhe"].forEach(x=>permitidas.add(x));
+  } else if (estado.usuario.perfil === "financeiro"){
+    ["escolaDetalhe","pedidoDetalhe"].forEach(x=>permitidas.add(x));
+  } else if (estado.usuario.perfil === "credenciador"){
+    permitidas.add("credenciamentoDetalhe");
+  }
+
+  const inicial = menuDoPerfil()[0].chave;
+  if (!permitidas.has(estado.tela)) estado.tela = inicial;
+  const tela = TELAS[estado.tela] || TELAS[inicial];
   tela(id("conteudo"));
 }
 
@@ -869,7 +889,9 @@ function telaLogin(alvo){
       const r = await api("login", { login: val("fLogin"), senha: id("fSenha").value });
       estado.token = r.token; estado.usuario = r.usuario;
       guardar("token", r.token);
-      estado.tela = r.usuario.precisaTrocarSenha ? "trocarSenha" : "painel";
+      estado.tela = r.usuario.precisaTrocarSenha ? "trocarSenha"
+        : r.usuario.perfil === "parceiro" ? "meuCredenciamento"
+        : r.usuario.perfil === "credenciador" ? "credenciamentos" : "painel";
       desenhar();
     }catch(e){
       torrada(e.message, "erro", e.codigo); b.disabled=false; b.textContent=t("entrar");
@@ -903,14 +925,14 @@ function telaTrocarSenha(alvo){
         ${estado.usuario.precisaTrocarSenha ? "" : `<button class="btn neutro" id="btVoltar">${t("voltar")}</button>`}
       </div>
     </div>`;
-  if (id("btVoltar")) id("btVoltar").onclick = ()=>irPara("painel");
+  if (id("btVoltar")) id("btVoltar").onclick = ()=>irPara(menuDoPerfil()[0].chave);
   id("btTrocar").onclick = async ()=>{
     if (id("sNova").value !== id("sNova2").value){ torrada(t("senhasDiferentes"), "erro"); return; }
     try{
       await api("senha.trocar", { senhaAtual: id("sAtual").value, novaSenha: id("sNova").value });
       estado.usuario.precisaTrocarSenha = false;
       torrada(t("senhaTrocada"), "ok");
-      irPara("painel");
+      irPara(menuDoPerfil()[0].chave);
     }catch(e){ torrada(e.message, "erro", e.codigo); }
   };
 }
@@ -2109,11 +2131,18 @@ async function telaCredenciamentoDetalhe(alvo){
 
           <div class="cartao cartao-pad">
             <h3 style="margin-bottom:12px">${t("decisaoCredenciamento")}</h3>
+            ${p.status === "AGUARDANDO_CONFERENCIA"
+              ? `<div class="aviso info" style="margin-bottom:12px">${t("prontoParaAtivar")}</div>`
+              : p.status === "ATIVO"
+                ? `<div class="aviso ok" style="margin-bottom:12px">${t("jaAtivo")}</div>`
+                : `<div class="aviso alerta" style="margin-bottom:12px">${t("aguardaAssinado")}</div>`}
             <div class="campo"><label for="crMotivo">${t("observacao")}</label>
               <textarea id="crMotivo" placeholder="${t("motivoNota")}"></textarea></div>
             <div class="barra-acoes">
-              <button class="btn ok" data-decisao="ativar">${t("ativarParceiro")}</button>
-              <button class="btn perigo" data-decisao="recusar">${t("recusar")}</button>
+              ${p.status === "AGUARDANDO_CONFERENCIA"
+                ? `<button class="btn ok" data-decisao="ativar">${t("ativarParceiro")}</button>` : ""}
+              ${p.status !== "ATIVO"
+                ? `<button class="btn perigo" data-decisao="recusar">${t("recusar")}</button>` : ""}
             </div>
           </div>
         </div>
@@ -3150,7 +3179,9 @@ document.addEventListener("keydown", e=>{ if(e.key==="Escape") fecharModal(); })
     try{
       const r = await api("sessao.me", {});
       estado.usuario = r.usuario;
-      estado.tela = r.usuario.precisaTrocarSenha ? "trocarSenha" : "painel";
+      estado.tela = r.usuario.precisaTrocarSenha ? "trocarSenha"
+        : r.usuario.perfil === "parceiro" ? "meuCredenciamento"
+        : r.usuario.perfil === "credenciador" ? "credenciamentos" : "painel";
     }catch(e){ encerrarLocal(); }
   }
   desenhar();
