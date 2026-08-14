@@ -334,6 +334,9 @@ const IDIOMAS = {
     arquivos:"arquivos", arquivo:"arquivo",
     dataNf:"Data da NF", dataNfObrigatoria:"Obrigatoria quando o status e Pago.",
     apsBase:"APs no calculo",
+    baixarPlanilha:"Baixar planilha", planilhaPronta:"Planilha gerada.",
+    colNoCalculo:"No calculo", colBase:"Base do calculo", colSim:"Sim", colNao:"Nao",
+    colTotal:"TOTAL", baseInstalado:"Instalado", basePrevisto:"Previsto",
     baseCalculoNota:"Calculado pelos APs instalados; onde ainda nao ha instalacao, pelos previstos.",
     faltaDataNf:"Informe a data da NF para marcar a escola como paga.",
     periodoNf:"Periodo da NF", de:"De", ate:"Ate", semDataNf:"Sem data de NF",
@@ -465,6 +468,9 @@ const IDIOMAS = {
     arquivos:"files", arquivo:"file",
     dataNf:"Invoice date", dataNfObrigatoria:"Required when the status is Paid.",
     apsBase:"APs in the calculation",
+    baixarPlanilha:"Download spreadsheet", planilhaPronta:"Spreadsheet generated.",
+    colNoCalculo:"In the calculation", colBase:"Calculation basis", colSim:"Yes", colNao:"No",
+    colTotal:"TOTAL", baseInstalado:"Installed", basePrevisto:"Planned",
     baseCalculoNota:"Based on installed APs; where nothing is installed yet, on the planned ones.",
     faltaDataNf:"Enter the invoice date to mark the school as paid.",
     periodoNf:"Invoice period", de:"From", ate:"To", semDataNf:"No invoice date",
@@ -548,6 +554,36 @@ function tamanhoLegivel(bytes){
   if (n < 1024) return n + " B";
   if (n < 1024*1024) return (n/1024).toFixed(0) + " KB";
   return (n/1024/1024).toFixed(1) + " MB";
+}
+
+/* Gera um CSV que o Excel abre com as colunas ja separadas:
+   BOM no inicio (acentos), ponto e virgula como separador e virgula
+   decimal, que e o padrao do Excel em portugues. */
+function baixarCsv(nomeArquivo, cabecalho, linhas){
+  const celula = (v)=>{
+    if (v === null || v === undefined) return "";
+    if (typeof v === "number") return String(v.toFixed(2)).replace(".", ",");
+    const texto = String(v);
+    return /[;"\n]/.test(texto) ? '"' + texto.replace(/"/g, '""') + '"' : texto;
+  };
+  const conteudo = "\ufeff" +
+    [cabecalho, ...linhas].map(linha => linha.map(celula).join(";")).join("\r\n");
+
+  const blob = new Blob([conteudo], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = nomeArquivo;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(()=> URL.revokeObjectURL(url), 1000);
+}
+
+function carimboData(){
+  const d = new Date();
+  const dois = (n)=> String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${dois(d.getMonth()+1)}-${dois(d.getDate())}-${dois(d.getHours())}${dois(d.getMinutes())}`;
 }
 
 function torrada(texto, tipo, codigo){
@@ -978,6 +1014,7 @@ async function telaPainel(alvo){
 
       <div class="barra-acoes" style="margin-top:10px">
         <button class="btn neutro pequeno" id="btPnLimpar">${t("limparFiltros")}</button>
+        <button class="btn pequeno" id="btPnExportar">${t("baixarPlanilha")}</button>
         <span class="mono" id="pnContagem" style="align-self:center;color:var(--texto-2);font-size:12.5px"></span>
       </div>
     </div>
@@ -1131,7 +1168,71 @@ async function telaPainel(alvo){
     });
   }
 
+  // Exporta o recorte que esta na tela; sem filtro, exporta tudo.
+  function exportar(){
+    const lista = linhas();
+    const cabecalho = [
+      t("inep"), t("escola"), t("cidade"), t("uf"), t("projeto"),
+      t("status"), t("dataNf"), t("parceiro"), t("miscelaneos"), t("prioridade"),
+      t("apsInst"), t("apsPrev"), t("apsBase"), t("colBase"),
+      ...(admin ? [t("receita")] : []),
+      t("totalGastos"), t("limite"), t("saldo"),
+      ...(admin ? [t("lucro")] : []),
+      t("colNoCalculo"),
+    ];
+
+    const corpo = lista.map(l=>{
+      const e = l.e;
+      return [
+        e.inep, e.escola, e.cidade, e.uf, e.projeto,
+        e.status, e.dataNf || "", e.nomeParceiro || "",
+        e.miscelaneosPor === "nos" ? t("miscelaneosNos") : t("miscelaneosParceiro"),
+        e.prioridade,
+        Number(e.qtdApsInst)||0, Number(e.qtdApsPrev)||0, l.aps,
+        l.previsto ? t("basePrevisto") : t("baseInstalado"),
+        ...(admin ? [l.receita] : []),
+        l.gastos, l.limite, l.limite - l.gastos,
+        ...(admin ? [l.receita - l.gastos] : []),
+        l.dentro ? t("colSim") : t("colNao"),
+      ];
+    });
+
+    // Linha de total: soma so o que entra no calculo, igual aos indicadores.
+    const naConta = lista.filter(l=>l.dentro);
+    const c = fechar(naConta);
+    corpo.push([]);
+    corpo.push([
+      t("colTotal"), `${naConta.length} ${t("escolasNoRecorte")}`, "", "", "",
+      "", "", "", "", "",
+      naConta.reduce((a,l)=>a+(Number(l.e.qtdApsInst)||0),0),
+      naConta.reduce((a,l)=>a+(Number(l.e.qtdApsPrev)||0),0),
+      c.aps, "",
+      ...(admin ? [c.receita] : []),
+      c.gastos, c.limite, c.saldo,
+      ...(admin ? [c.lucro] : []),
+      "",
+    ]);
+
+    if (admin){
+      corpo.push([]);
+      corpo.push([t("resumoFinanceiro")]);
+      corpo.push([t("totalRecebido"), c.receita]);
+      corpo.push([`${t("totalImpostos")} (${numero(percentualImposto,2)}%)`, c.imposto]);
+      corpo.push([t("totalGastos"), c.gastos]);
+      corpo.push([t("baseSocio"), c.baseSocio]);
+      corpo.push([`${t("valorSocio")} (${numero(percentualSocio,2)}%)`, c.socio]);
+      corpo.push([t("custoTotal"), c.custoTotal]);
+      corpo.push([t("lucro"), c.lucro]);
+      corpo.push([t("margemLiquida"), c.margemLiquida]);
+      corpo.push([`${t("percentualGasto")}`, percentualGasto]);
+    }
+
+    baixarCsv(`gasto-por-inep-${carimboData()}.csv`, cabecalho, corpo);
+    torrada(t("planilhaPronta"), "ok");
+  }
+
   // -------------------------------------------------------------- ligacoes
+  id("btPnExportar").onclick = exportar;
   if (id("pnKits")){
     id("pnKits").addEventListener("toggle", ()=>{ f.kitsAberto = id("pnKits").open; });
     id("btIrKits").onclick = (ev)=>{ ev.preventDefault(); ev.stopPropagation(); irPara("kits"); };
