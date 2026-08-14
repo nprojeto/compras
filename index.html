@@ -144,6 +144,8 @@ td.num,th.num{text-align:right}
 .selo.vermelho{background:var(--perigo-claro);color:var(--perigo)}
 .selo.cinza{background:var(--linha-2);color:var(--texto-2)}
 .selo.roxo{background:#EFE9FB;color:#5B3FA8}
+input.invalido,select.invalido{border-color:var(--perigo);background:#FFFBFA}
+.erro-campo{display:block;color:var(--perigo);font-size:11.5px;margin-top:3px;min-height:1px}
 .etapas{display:flex;gap:6px;flex-wrap:wrap}
 .etapa{flex:1;min-width:120px;text-align:center;position:relative}
 .etapa .bolha{width:30px;height:30px;border-radius:50%;margin:0 auto 6px;
@@ -356,12 +358,17 @@ const IDIOMAS = {
     emailViraLogin:"preencha o e-mail acima",
     razaoSocial:"Razao social", cnpj:"CNPJ",
     inscricaoEstadual:"Inscricao estadual", inscricaoMunicipal:"Inscricao municipal",
-    rua:"Rua", numero:"Numero", bairro:"Bairro", cep:"CEP", ddd:"DDD",
-    celular:"Celular", pessoaContato:"Pessoa de contato",
+    rua:"Rua", numeroEndereco:"Numero", bairro:"Bairro", cep:"CEP",
+    estado:"Estado", telefoneEmpresa:"Telefone", celular:"Celular",
+    pessoaContato:"Pessoa de contato",
     representanteNome:"Nome completo do representante legal", representanteCpf:"CPF do representante",
     representanteEmail:"E-mail do representante", representanteTelefone:"Telefone/celular do representante",
     cartaoCnpj:"Cartao CNPJ", cartaoCnpjNota:"Somente PDF, ate 5 MB.",
     somentePdf:"O arquivo precisa ser um PDF.", semCartaoCnpj:"Sem Cartao CNPJ",
+    cnpjInvalido:"numero nao confere", cpfInvalido:"numero nao confere",
+    cepInvalido:"informe os 8 digitos", ufInvalida:"use a sigla com duas letras",
+    telefoneInvalido:"informe DDD e numero", emailInvalido:"endereco invalido",
+    senhaRegra:"Minimo 8 caracteres, com letras e numeros.",
     enviarSolicitacao:"Enviar solicitacao", solicitacaoEnviada:"Solicitacao enviada.",
     solicitacaoEnviadaNota:"Entre com o e-mail e a senha que voce cadastrou para acompanhar o andamento.",
     semCredenciamentos:"Nenhuma solicitacao por aqui.", analisar:"Analisar",
@@ -531,12 +538,17 @@ const IDIOMAS = {
     emailViraLogin:"fill in the e-mail above",
     razaoSocial:"Legal name", cnpj:"Tax ID (CNPJ)",
     inscricaoEstadual:"State registration", inscricaoMunicipal:"City registration",
-    rua:"Street", numero:"Number", bairro:"District", cep:"Postal code", ddd:"Area code",
-    celular:"Mobile", pessoaContato:"Contact person",
+    rua:"Street", numeroEndereco:"Number", bairro:"District", cep:"Postal code",
+    estado:"State", telefoneEmpresa:"Phone", celular:"Mobile",
+    pessoaContato:"Contact person",
     representanteNome:"Legal representative full name", representanteCpf:"Representative ID (CPF)",
     representanteEmail:"Representative e-mail", representanteTelefone:"Representative phone",
     cartaoCnpj:"CNPJ certificate", cartaoCnpjNota:"PDF only, up to 5 MB.",
     somentePdf:"The file must be a PDF.", semCartaoCnpj:"No CNPJ certificate",
+    cnpjInvalido:"number does not check out", cpfInvalido:"number does not check out",
+    cepInvalido:"enter all 8 digits", ufInvalida:"use the two-letter code",
+    telefoneInvalido:"enter area code and number", emailInvalido:"invalid address",
+    senhaRegra:"At least 8 characters, with letters and numbers.",
     enviarSolicitacao:"Submit request", solicitacaoEnviada:"Request submitted.",
     solicitacaoEnviadaNota:"Sign in with the e-mail and password you registered to follow the progress.",
     semCredenciamentos:"No requests here.", analisar:"Review",
@@ -1749,13 +1761,22 @@ function mascara(campo, tipo){
         .replace(/\.(\d{3})(\d)/, ".$1-$2");
     else if (tipo === "cep")
       campo.value = n.slice(0,8).replace(/^(\d{5})(\d)/, "$1-$2");
-    else if (tipo === "ddd")
-      campo.value = n.slice(0,2);
-    else if (tipo === "telefone")
-      campo.value = n.slice(0,9).replace(/^(\d{4,5})(\d)/, "$1-$2");
-    else if (tipo === "telefoneCompleto")
-      campo.value = n.slice(0,11).replace(/^(\d{2})(\d)/, "($1) $2")
-        .replace(/(\d{4,5})(\d{4})$/, "$1-$2");
+    else if (tipo === "telefoneFixo"){
+      // 00 0000-0000
+      const d = n.slice(0,10);
+      campo.value = d.length <= 2 ? d
+        : d.length <= 6 ? `${d.slice(0,2)} ${d.slice(2)}`
+        : `${d.slice(0,2)} ${d.slice(2,6)}-${d.slice(6)}`;
+    }
+    else if (tipo === "celular"){
+      // 00 00000-0000
+      const d = n.slice(0,11);
+      campo.value = d.length <= 2 ? d
+        : d.length <= 7 ? `${d.slice(0,2)} ${d.slice(2)}`
+        : `${d.slice(0,2)} ${d.slice(2,7)}-${d.slice(7)}`;
+    }
+    else if (tipo === "email")
+      campo.value = campo.value.replace(/\s/g, "").toLowerCase();
     else if (tipo === "uf")
       campo.value = campo.value.replace(/[^A-Za-z]/g, "").toUpperCase().slice(0,2);
     else if (tipo === "numeros")
@@ -1765,27 +1786,67 @@ function mascara(campo, tipo){
   aplicar();
 }
 
+/* campo, rotulo, mascara, colunas que ocupa */
 const CAMPOS_FORMULARIO = [
   ["razaoSocial", "razaoSocial", null, 2],
   ["cnpj", "cnpj", "cnpj", 1],
   ["inscricaoEstadual", "inscricaoEstadual", "numeros", 1],
   ["inscricaoMunicipal", "inscricaoMunicipal", "numeros", 1],
   ["rua", "rua", null, 2],
-  ["numero", "numero", null, 1],
+  ["numero", "numeroEndereco", null, 1],
   ["bairro", "bairro", null, 1],
   ["cidade", "cidade", null, 1],
   ["estado", "estado", "uf", 1],
   ["cep", "cep", "cep", 1],
-  ["ddd", "ddd", "ddd", 1],
-  ["telefone", "telefone", "telefone", 1],
-  ["celular", "celular", "telefone", 1],
+  ["telefone", "telefoneEmpresa", "telefoneFixo", 1],
+  ["celular", "celular", "celular", 1],
   ["pessoaContato", "pessoaContato", null, 2],
-  ["email", "email", null, 2],
+  ["email", "email", "email", 2],
   ["representanteNome", "representanteNome", null, 2],
   ["representanteCpf", "representanteCpf", "cpf", 1],
-  ["representanteEmail", "representanteEmail", null, 2],
-  ["representanteTelefone", "representanteTelefone", "telefoneCompleto", 1],
+  ["representanteEmail", "representanteEmail", "email", 2],
+  ["representanteTelefone", "representanteTelefone", "celular", 1],
 ];
+
+/* Confere na hora: devolve "" quando esta certo. */
+function conferirCampo(campo, valor){
+  const n = String(valor||"").replace(/\D/g, "");
+  if (!valor) return "";
+  if (campo === "cnpj") return validarCnpjLocal(valor) ? "" : t("cnpjInvalido");
+  if (campo === "representanteCpf") return validarCpfLocal(valor) ? "" : t("cpfInvalido");
+  if (campo === "cep") return n.length === 8 ? "" : t("cepInvalido");
+  if (campo === "estado") return valor.length === 2 ? "" : t("ufInvalida");
+  if (campo === "telefone") return n.length >= 10 ? "" : t("telefoneInvalido");
+  if (campo === "celular" || campo === "representanteTelefone")
+    return n.length >= 10 ? "" : t("telefoneInvalido");
+  if (campo === "email" || campo === "representanteEmail")
+    return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(valor) ? "" : t("emailInvalido");
+  return "";
+}
+
+function validarCnpjLocal(v){
+  const n = String(v||"").replace(/\D/g, "");
+  if (n.length !== 14 || /^(\d)\1{13}$/.test(n)) return false;
+  const digito = (base)=>{
+    let peso = base.length - 7, soma = 0;
+    for (let i=0;i<base.length;i++){ soma += Number(base[i])*peso--; if (peso<2) peso = 9; }
+    const resto = soma % 11;
+    return resto < 2 ? 0 : 11 - resto;
+  };
+  return digito(n.slice(0,12)) === Number(n[12]) && digito(n.slice(0,13)) === Number(n[13]);
+}
+
+function validarCpfLocal(v){
+  const n = String(v||"").replace(/\D/g, "");
+  if (n.length !== 11 || /^(\d)\1{10}$/.test(n)) return false;
+  const digito = (qtd)=>{
+    let soma = 0;
+    for (let i=0;i<qtd;i++) soma += Number(n[i])*(qtd+1-i);
+    const resto = (soma*10) % 11;
+    return resto === 10 ? 0 : resto;
+  };
+  return digito(9) === Number(n[9]) && digito(10) === Number(n[10]);
+}
 
 function telaCredenciamentoForm(alvo){
   alvo.innerHTML = `
@@ -1799,10 +1860,11 @@ function telaCredenciamentoForm(alvo){
         <div class="cartao cartao-pad" style="margin-bottom:14px">
           <h3 style="margin-bottom:12px">${t("dadosEmpresa")}</h3>
           <div class="grade g4">
-            ${CAMPOS_FORMULARIO.map(([campo,, , span])=>`
+            ${CAMPOS_FORMULARIO.map(([campo, rotulo, , span])=>`
               <div class="campo" style="margin:0;grid-column:span ${span}">
-                <label for="cr_${campo}">${t(campo)} *</label>
-                <input id="cr_${campo}" autocomplete="off"></div>`).join("")}
+                <label for="cr_${campo}">${t(rotulo)} *</label>
+                <input id="cr_${campo}" autocomplete="off">
+                <small class="erro-campo" id="erro_${campo}"></small></div>`).join("")}
           </div>
         </div>
 
@@ -1815,13 +1877,15 @@ function telaCredenciamentoForm(alvo){
         <div class="cartao cartao-pad" style="margin-bottom:14px">
           <h3 style="margin-bottom:4px">${t("acessoPlataforma")}</h3>
           <p style="color:var(--texto-2);font-size:12.5px;margin:0 0 12px">${t("acessoNota")}</p>
-          <div class="grade g2">
+          <div class="grade g3">
             <div class="campo" style="margin:0"><label>${t("usuario")}</label>
               <input id="cr_login" disabled placeholder="${t("emailViraLogin")}"></div>
             <div class="campo" style="margin:0"><label for="cr_senha">${t("senha")} *</label>
-              <input id="cr_senha" type="password" autocomplete="new-password"></div>
+              <input id="cr_senha" type="password" autocomplete="new-password">
+              <small style="color:var(--texto-3)">${t("senhaRegra")}</small></div>
             <div class="campo" style="margin:0"><label for="cr_senha2">${t("repetirSenha")} *</label>
-              <input id="cr_senha2" type="password" autocomplete="new-password"></div>
+              <input id="cr_senha2" type="password" autocomplete="new-password">
+              <small class="erro-campo" id="erro_senha"></small></div>
           </div>
         </div>
 
@@ -1833,8 +1897,20 @@ function telaCredenciamentoForm(alvo){
       </main>
     </div>`;
 
+  // Cada campo se confere ao sair, mostrando o problema logo abaixo.
   CAMPOS_FORMULARIO.forEach(([campo, , tipoMascara])=>{
-    if (tipoMascara) mascara(id("cr_"+campo), tipoMascara);
+    const entrada = id("cr_"+campo);
+    if (tipoMascara) mascara(entrada, tipoMascara);
+    const conferir = ()=>{
+      const problema = conferirCampo(campo, entrada.value);
+      id("erro_"+campo).textContent = problema;
+      entrada.classList.toggle("invalido", !!problema);
+      return !problema;
+    };
+    entrada.addEventListener("blur", conferir);
+    entrada.addEventListener("input", ()=>{
+      if (entrada.classList.contains("invalido")) conferir();
+    });
   });
   id("cr_email").addEventListener("input", ()=>{ id("cr_login").value = id("cr_email").value.toLowerCase(); });
 
@@ -1843,19 +1919,38 @@ function telaCredenciamentoForm(alvo){
   id("btCancelarCred").onclick = voltar;
 
   id("btEnviarCred").onclick = async ()=>{
-    const faltando = CAMPOS_FORMULARIO.filter(([campo])=> !val("cr_"+campo)).map(([campo])=> t(campo));
+    const faltando = [];
+    CAMPOS_FORMULARIO.forEach(([campo, rotulo])=>{
+      const valor = val("cr_"+campo);
+      if (!valor){ faltando.push(t(rotulo)); return; }
+      const problema = conferirCampo(campo, valor);
+      if (problema){
+        faltando.push(`${t(rotulo)}: ${problema}`);
+        id("erro_"+campo).textContent = problema;
+        id("cr_"+campo).classList.add("invalido");
+      }
+    });
     const arquivo = id("cr_arquivo").files[0];
     if (!arquivo) faltando.push(t("cartaoCnpj"));
     if (faltando.length > 0){
       id("cr_aviso").innerHTML = `<div class="aviso alerta" style="margin-bottom:12px">
         <h4>${t("faltando")}</h4><ul>${faltando.map(x=>`<li>${esc(x)}</li>`).join("")}</ul></div>`;
+      const primeiro = CAMPOS_FORMULARIO.find(([c])=> !val("cr_"+c) || conferirCampo(c, val("cr_"+c)));
+      if (primeiro) id("cr_"+primeiro[0]).focus();
       return;
     }
+    id("cr_aviso").innerHTML = "";
     if (arquivo.type !== "application/pdf" && !arquivo.name.toLowerCase().endsWith(".pdf")){
       torrada(t("somentePdf"), "erro"); return;
     }
     if (arquivo.size > 5*1024*1024){ torrada(t("arquivoGrande"), "erro"); return; }
-    if (id("cr_senha").value !== id("cr_senha2").value){ torrada(t("senhasDiferentes"), "erro"); return; }
+    if (id("cr_senha").value.length < 8 || !/[A-Za-z]/.test(id("cr_senha").value) || !/[0-9]/.test(id("cr_senha").value)){
+      id("erro_senha").textContent = t("senhaRegra"); torrada(t("senhaRegra"), "erro"); return;
+    }
+    if (id("cr_senha").value !== id("cr_senha2").value){
+      id("erro_senha").textContent = t("senhasDiferentes"); torrada(t("senhasDiferentes"), "erro"); return;
+    }
+    id("erro_senha").textContent = "";
 
     const botao = id("btEnviarCred");
     botao.disabled = true; botao.textContent = t("enviandoArquivo");
@@ -1966,7 +2061,7 @@ async function telaCredenciamentoDetalhe(alvo){
                ["inscricaoEstadual",p.inscricaoEstadual],["inscricaoMunicipal",p.inscricaoMunicipal],
                ["rua",`${p.rua}, ${p.numero} — ${p.bairro}`],
                ["cidade",`${p.cidade}/${p.estado} — ${p.cep}`],
-               ["telefone",`(${p.ddd}) ${p.telefone}`],["celular",`(${p.ddd}) ${p.celular}`],
+               ["telefoneEmpresa",p.telefone],["celular",p.celular],
                ["pessoaContato",p.pessoaContato],["email",p.email],
                ["representanteNome",p.representanteNome],["representanteCpf",p.representanteCpf],
                ["representanteEmail",p.representanteEmail],["representanteTelefone",p.representanteTelefone],
