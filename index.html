@@ -144,6 +144,16 @@ td.num,th.num{text-align:right}
 .selo.vermelho{background:var(--perigo-claro);color:var(--perigo)}
 .selo.cinza{background:var(--linha-2);color:var(--texto-2)}
 .selo.roxo{background:#EFE9FB;color:#5B3FA8}
+.etapas{display:flex;gap:6px;flex-wrap:wrap}
+.etapa{flex:1;min-width:120px;text-align:center;position:relative}
+.etapa .bolha{width:30px;height:30px;border-radius:50%;margin:0 auto 6px;
+  display:flex;align-items:center;justify-content:center;font-family:"IBM Plex Mono",monospace;
+  font-size:12.5px;font-weight:600;background:var(--linha);color:var(--texto-3)}
+.etapa .rotulo{font-size:11.5px;color:var(--texto-3);line-height:1.3}
+.etapa.feita .bolha{background:var(--ok);color:#fff}
+.etapa.feita .rotulo{color:var(--texto-2)}
+.etapa.agora .bolha{background:var(--sinal);color:#fff;box-shadow:0 0 0 4px var(--sinal-claro)}
+.etapa.agora .rotulo{color:var(--sinal);font-weight:600}
 .anexo{border:1px solid var(--linha);border-radius:10px;padding:13px;margin-bottom:10px}
 .anexo.vazio-arq{border-style:dashed;background:var(--linha-2)}
 .anexo .titulo{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px}
@@ -330,13 +340,54 @@ const IDIOMAS = {
     stREMOVEU_ANEXO:"Removeu anexo",
     documentos:"Documentos", anexoNf:"Nota fiscal", anexoComprovante:"Comprovante de pagamento",
     anexoNfQuem:"Anexada pelo comprador", anexoComprovanteQuem:"Anexado pelo financeiro",
-    anexar:"Anexar arquivo", maisUm:"Anexar mais um", baixar:"Baixar", removerAnexo:"Remover",
+    anexar:"Anexar arquivo", maisUm:"Anexar mais um", trocarArquivo:"Trocar arquivo", baixar:"Baixar", removerAnexo:"Remover",
     arquivos:"arquivos", arquivo:"arquivo",
     dataNf:"Data da NF", dataNfObrigatoria:"Obrigatoria quando o status e Pago.",
     apsBase:"APs no calculo",
     baixarPlanilha:"Baixar planilha", planilhaPronta:"Planilha gerada.",
     colNoCalculo:"No calculo", colBase:"Base do calculo", colSim:"Sim", colNao:"Nao",
     colTotal:"TOTAL", baseInstalado:"Instalado", basePrevisto:"Previsto",
+    solicitarCredenciamento:"Solicitar credenciamento",
+    credenciamentoIntro:"Preencha os dados da empresa. Um credenciador vai analisar e enviar o contrato.",
+    credenciamentos:"Credenciamentos", meuCredenciamento:"Meu credenciamento",
+    perfilCredenciador:"Credenciador", perfilParceiro:"Parceiro",
+    dadosEmpresa:"Dados da empresa", acessoPlataforma:"Acesso a plataforma",
+    acessoNota:"O e-mail informado acima sera o seu usuario.",
+    emailViraLogin:"preencha o e-mail acima",
+    razaoSocial:"Razao social", cnpj:"CNPJ",
+    inscricaoEstadual:"Inscricao estadual", inscricaoMunicipal:"Inscricao municipal",
+    rua:"Rua", numero:"Numero", bairro:"Bairro", cep:"CEP", ddd:"DDD",
+    celular:"Celular", pessoaContato:"Pessoa de contato",
+    representanteNome:"Nome completo do representante legal", representanteCpf:"CPF do representante",
+    representanteEmail:"E-mail do representante", representanteTelefone:"Telefone/celular do representante",
+    cartaoCnpj:"Cartao CNPJ", cartaoCnpjNota:"Somente PDF, ate 5 MB.",
+    somentePdf:"O arquivo precisa ser um PDF.", semCartaoCnpj:"Sem Cartao CNPJ",
+    enviarSolicitacao:"Enviar solicitacao", solicitacaoEnviada:"Solicitacao enviada.",
+    solicitacaoEnviadaNota:"Entre com o e-mail e a senha que voce cadastrou para acompanhar o andamento.",
+    semCredenciamentos:"Nenhuma solicitacao por aqui.", analisar:"Analisar",
+    crAGUARDANDO_ANALISE:"Aguardando analise", crEM_ANALISE:"Em analise",
+    crCONTRATO_GERADO:"Contrato gerado", crAGUARDANDO_CONFERENCIA:"Em conferencia",
+    crATIVO:"Ativo", crRECUSADO:"Recusado",
+    condicoesContrato:"Condicoes do contrato",
+    condicoesNota:"Estes campos entram no Quadro Resumo do contrato.",
+    regiaoAtuacao:"Regiao de atuacao", prazoPagamento:"Prazo de pagamento (dias)",
+    vigenciaMeses:"Vigencia (meses)",
+    valoresNegociados:"Valores negociados", valoresNota:"Viram o Anexo III do contrato e o custo de cada INEP deste parceiro.",
+    gerarContrato:"Gerar contrato", regerarContrato:"Gerar contrato de novo",
+    verContrato:"Abrir contrato", contratoGerado:"Contrato gerado.",
+    contrato:"Contrato", contratoAssinado:"Contrato assinado",
+    contratoNota:"Abra o contrato e use a impressao do navegador para salvar em PDF.",
+    enviarAssinadoNota:"Depois de assinar, envie o PDF aqui. Somente PDF, ate 5 MB.",
+    decisaoCredenciamento:"Decisao", ativarParceiro:"Ativar parceiro",
+    motivoRecusa:"Motivo", motivoNota:"Explique ao parceiro o que precisa mudar.",
+    motivoObrigatorio:"Informe o motivo da recusa.",
+    permitaPopup:"Libere as janelas pop-up para abrir o contrato.",
+    passoAguardando:"Recebemos sua solicitacao. Um credenciador vai analisar os dados.",
+    passoEmAnalise:"Seus dados estao em analise.",
+    passoAssinar:"Contrato disponivel. Baixe, assine e envie o PDF assinado.",
+    passoConferencia:"Contrato assinado recebido. Estamos conferindo.",
+    passoAtivo:"Credenciamento concluido. Voce ja pode ser atribuido as escolas.",
+    passoRecusado:"Credenciamento recusado. Veja o motivo abaixo.",
     baseCalculoNota:"Calculado pelos APs instalados; onde ainda nao ha instalacao, pelos previstos.",
     faltaDataNf:"Informe a data da NF para marcar a escola como paga.",
     periodoNf:"Periodo da NF", de:"De", ate:"Ate", semDataNf:"Sem data de NF",
@@ -464,13 +515,54 @@ const IDIOMAS = {
     stREMOVEU_ANEXO:"Removed attachment",
     documentos:"Documents", anexoNf:"Invoice", anexoComprovante:"Payment receipt",
     anexoNfQuem:"Attached by the buyer", anexoComprovanteQuem:"Attached by finance",
-    anexar:"Attach file", maisUm:"Attach another", baixar:"Download", removerAnexo:"Remove",
+    anexar:"Attach file", maisUm:"Attach another", trocarArquivo:"Replace file", baixar:"Download", removerAnexo:"Remove",
     arquivos:"files", arquivo:"file",
     dataNf:"Invoice date", dataNfObrigatoria:"Required when the status is Paid.",
     apsBase:"APs in the calculation",
     baixarPlanilha:"Download spreadsheet", planilhaPronta:"Spreadsheet generated.",
     colNoCalculo:"In the calculation", colBase:"Calculation basis", colSim:"Yes", colNao:"No",
     colTotal:"TOTAL", baseInstalado:"Installed", basePrevisto:"Planned",
+    solicitarCredenciamento:"Request accreditation",
+    credenciamentoIntro:"Fill in your company details. An officer will review and send the contract.",
+    credenciamentos:"Accreditations", meuCredenciamento:"My accreditation",
+    perfilCredenciador:"Accreditation officer", perfilParceiro:"Partner",
+    dadosEmpresa:"Company details", acessoPlataforma:"Platform access",
+    acessoNota:"The e-mail above will be your username.",
+    emailViraLogin:"fill in the e-mail above",
+    razaoSocial:"Legal name", cnpj:"Tax ID (CNPJ)",
+    inscricaoEstadual:"State registration", inscricaoMunicipal:"City registration",
+    rua:"Street", numero:"Number", bairro:"District", cep:"Postal code", ddd:"Area code",
+    celular:"Mobile", pessoaContato:"Contact person",
+    representanteNome:"Legal representative full name", representanteCpf:"Representative ID (CPF)",
+    representanteEmail:"Representative e-mail", representanteTelefone:"Representative phone",
+    cartaoCnpj:"CNPJ certificate", cartaoCnpjNota:"PDF only, up to 5 MB.",
+    somentePdf:"The file must be a PDF.", semCartaoCnpj:"No CNPJ certificate",
+    enviarSolicitacao:"Submit request", solicitacaoEnviada:"Request submitted.",
+    solicitacaoEnviadaNota:"Sign in with the e-mail and password you registered to follow the progress.",
+    semCredenciamentos:"No requests here.", analisar:"Review",
+    crAGUARDANDO_ANALISE:"Awaiting review", crEM_ANALISE:"Under review",
+    crCONTRATO_GERADO:"Contract issued", crAGUARDANDO_CONFERENCIA:"Being checked",
+    crATIVO:"Active", crRECUSADO:"Rejected",
+    condicoesContrato:"Contract terms",
+    condicoesNota:"These fields go into the contract summary table.",
+    regiaoAtuacao:"Coverage area", prazoPagamento:"Payment term (days)",
+    vigenciaMeses:"Term (months)",
+    valoresNegociados:"Agreed rates", valoresNota:"They become Annex III of the contract and the cost of each INEP.",
+    gerarContrato:"Generate contract", regerarContrato:"Regenerate contract",
+    verContrato:"Open contract", contratoGerado:"Contract generated.",
+    contrato:"Contract", contratoAssinado:"Signed contract",
+    contratoNota:"Open the contract and use the browser print dialog to save as PDF.",
+    enviarAssinadoNota:"After signing, upload the PDF here. PDF only, up to 5 MB.",
+    decisaoCredenciamento:"Decision", ativarParceiro:"Activate partner",
+    motivoRecusa:"Reason", motivoNota:"Tell the partner what needs to change.",
+    motivoObrigatorio:"Enter the reason for rejection.",
+    permitaPopup:"Allow pop-ups to open the contract.",
+    passoAguardando:"We received your request. An officer will review the details.",
+    passoEmAnalise:"Your details are under review.",
+    passoAssinar:"Contract available. Download, sign and upload the signed PDF.",
+    passoConferencia:"Signed contract received. We are checking it.",
+    passoAtivo:"Accreditation complete. You can now be assigned to schools.",
+    passoRecusado:"Accreditation rejected. See the reason below.",
     baseCalculoNota:"Based on installed APs; where nothing is installed yet, on the planned ones.",
     faltaDataNf:"Enter the invoice date to mark the school as paid.",
     periodoNf:"Invoice period", de:"From", ate:"To", semDataNf:"No invoice date",
@@ -638,12 +730,18 @@ async function api(acao, dados){
    =================================================================== */
 function menuDoPerfil(){
   const p = estado.usuario.perfil;
+
+  // O parceiro so acompanha o proprio credenciamento.
+  if (p === "parceiro") return [{ chave:"meuCredenciamento", texto:t("meuCredenciamento") }];
+  if (p === "credenciador") return [{ chave:"credenciamentos", texto:t("credenciamentos") }];
+
   const itens = [{ chave:"painel", texto:t("painel") }];
   itens.push({ chave:"escolas", texto:t("escolas") });
   if (p === "comprador") itens.push({ chave:"pedidoNovo", texto:t("novoPedido") });
   itens.push({ chave:"pedidos", texto:t("pedidos") });
   if (p === "comprador") itens.push({ chave:"parceiros", texto:t("parceiros") });
   if (p === "admin"){
+    itens.push({ chave:"credenciamentos", texto:t("credenciamentos") });
     itens.push({ chave:"parceiros", texto:t("parceiros") });
     itens.push({ chave:"usuarios", texto:t("usuarios") });
   }
@@ -660,6 +758,10 @@ const TELAS = {
   login: telaLogin,
   trocarSenha: telaTrocarSenha,
   painel: telaPainel,
+  credenciamentoForm: telaCredenciamentoForm,
+  credenciamentos: telaCredenciamentos,
+  credenciamentoDetalhe: telaCredenciamentoDetalhe,
+  meuCredenciamento: telaMeuCredenciamento,
   escolas: telaEscolas,
   escolaForm: telaEscolaForm,
   escolaDetalhe: telaEscolaDetalhe,
@@ -674,11 +776,17 @@ const TELAS = {
 
 function desenhar(){
   const raiz = id("raiz");
-  if (!estado.usuario){ raiz.innerHTML = ""; telaLogin(raiz); return; }
+  if (!estado.usuario){
+    raiz.innerHTML = "";
+    if (estado.tela === "credenciamentoForm") telaCredenciamentoForm(raiz);
+    else telaLogin(raiz);
+    return;
+  }
   if (estado.usuario.precisaTrocarSenha && estado.tela !== "trocarSenha"){
     estado.tela = "trocarSenha";
   }
-  const rotulo = { admin:t("perfilAdmin"), financeiro:t("perfilFinanceiro"), comprador:t("perfilComprador") }[estado.usuario.perfil];
+  const rotulo = { admin:t("perfilAdmin"), financeiro:t("perfilFinanceiro"), comprador:t("perfilComprador"),
+    credenciador:t("perfilCredenciador"), parceiro:t("perfilParceiro") }[estado.usuario.perfil];
   raiz.innerHTML = `
     <div class="app">
       <nav class="rail">
@@ -706,7 +814,9 @@ function desenhar(){
   id("btIdioma").onclick = ()=>{ idioma = idioma==="pt-BR"?"en":"pt-BR"; guardar("idioma", idioma); desenhar(); };
   id("btSair").onclick = sair;
 
-  const tela = TELAS[estado.tela] || telaPainel;
+  const inicial = estado.usuario.perfil === "parceiro" ? telaMeuCredenciamento
+    : estado.usuario.perfil === "credenciador" ? telaCredenciamentos : telaPainel;
+  const tela = TELAS[estado.tela] || inicial;
   tela(id("conteudo"));
 }
 
@@ -731,6 +841,8 @@ function telaLogin(alvo){
         <div class="campo"><label for="fSenha">${t("senha")}</label>
           <input id="fSenha" type="password" autocomplete="current-password"></div>
         <button class="btn" id="btEntrar" style="width:100%;justify-content:center">${t("entrar")}</button>
+        <button class="btn neutro" id="btCredenciar" style="width:100%;justify-content:center;margin-top:9px">
+          ${t("solicitarCredenciamento")}</button>
         <p style="margin-top:14px;font-size:12px;color:var(--texto-3)">
           ${idioma==="pt-BR"?"Idioma":"Language"}:
           <a href="#" id="lkIdioma">${idioma==="pt-BR"?"English":"Portugues"}</a>
@@ -752,6 +864,7 @@ function telaLogin(alvo){
     }
   };
   id("btEntrar").onclick = enviar;
+  id("btCredenciar").onclick = ()=>{ estado.tela = "credenciamentoForm"; desenhar(); };
   ["fLogin","fSenha"].forEach(c=> id(c).addEventListener("keydown", e=>{ if(e.key==="Enter") enviar(); }));
   id("fLogin").focus();
 }
@@ -1606,6 +1719,498 @@ async function telaEscolaForm(alvo){
 }
 
 /* ===================================================================
+   9a. CREDENCIAMENTO — formulario publico, fila do credenciador e
+       acompanhamento do parceiro.
+   =================================================================== */
+const ETAPAS_CREDENCIAMENTO = [
+  "AGUARDANDO_ANALISE", "EM_ANALISE", "CONTRATO_GERADO", "AGUARDANDO_CONFERENCIA", "ATIVO",
+];
+
+function seloCredenciamento(status){
+  const cor = {
+    AGUARDANDO_ANALISE:"ambar", EM_ANALISE:"azul", CONTRATO_GERADO:"roxo",
+    AGUARDANDO_CONFERENCIA:"azul", ATIVO:"verde", RECUSADO:"vermelho",
+  }[status] || "cinza";
+  return `<span class="selo ${cor}">${t("cr"+status)}</span>`;
+}
+
+/* Mascaras de digitacao. Cada uma devolve o texto ja formatado. */
+function mascara(campo, tipo){
+  const aplicar = ()=>{
+    const n = campo.value.replace(/\D/g, "");
+    if (tipo === "cnpj")
+      campo.value = n.slice(0,14).replace(/^(\d{2})(\d)/, "$1.$2")
+        .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
+        .replace(/\.(\d{3})(\d)/, ".$1/$2")
+        .replace(/(\d{4})(\d)/, "$1-$2");
+    else if (tipo === "cpf")
+      campo.value = n.slice(0,11).replace(/^(\d{3})(\d)/, "$1.$2")
+        .replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3")
+        .replace(/\.(\d{3})(\d)/, ".$1-$2");
+    else if (tipo === "cep")
+      campo.value = n.slice(0,8).replace(/^(\d{5})(\d)/, "$1-$2");
+    else if (tipo === "ddd")
+      campo.value = n.slice(0,2);
+    else if (tipo === "telefone")
+      campo.value = n.slice(0,9).replace(/^(\d{4,5})(\d)/, "$1-$2");
+    else if (tipo === "telefoneCompleto")
+      campo.value = n.slice(0,11).replace(/^(\d{2})(\d)/, "($1) $2")
+        .replace(/(\d{4,5})(\d{4})$/, "$1-$2");
+    else if (tipo === "uf")
+      campo.value = campo.value.replace(/[^A-Za-z]/g, "").toUpperCase().slice(0,2);
+    else if (tipo === "numeros")
+      campo.value = n.slice(0,20);
+  };
+  campo.addEventListener("input", aplicar);
+  aplicar();
+}
+
+const CAMPOS_FORMULARIO = [
+  ["razaoSocial", "razaoSocial", null, 2],
+  ["cnpj", "cnpj", "cnpj", 1],
+  ["inscricaoEstadual", "inscricaoEstadual", "numeros", 1],
+  ["inscricaoMunicipal", "inscricaoMunicipal", "numeros", 1],
+  ["rua", "rua", null, 2],
+  ["numero", "numero", null, 1],
+  ["bairro", "bairro", null, 1],
+  ["cidade", "cidade", null, 1],
+  ["estado", "estado", "uf", 1],
+  ["cep", "cep", "cep", 1],
+  ["ddd", "ddd", "ddd", 1],
+  ["telefone", "telefone", "telefone", 1],
+  ["celular", "celular", "telefone", 1],
+  ["pessoaContato", "pessoaContato", null, 2],
+  ["email", "email", null, 2],
+  ["representanteNome", "representanteNome", null, 2],
+  ["representanteCpf", "representanteCpf", "cpf", 1],
+  ["representanteEmail", "representanteEmail", null, 2],
+  ["representanteTelefone", "representanteTelefone", "telefoneCompleto", 1],
+];
+
+function telaCredenciamentoForm(alvo){
+  alvo.innerHTML = `
+    <div class="app" style="grid-template-columns:1fr">
+      <main class="conteudo" style="max-width:1000px;margin:0 auto">
+        <div class="cabeca">
+          <div><h1>${t("solicitarCredenciamento")}</h1><p>${t("credenciamentoIntro")}</p></div>
+          <button class="btn neutro" id="btVoltarLogin">${t("voltar")}</button>
+        </div>
+
+        <div class="cartao cartao-pad" style="margin-bottom:14px">
+          <h3 style="margin-bottom:12px">${t("dadosEmpresa")}</h3>
+          <div class="grade g4">
+            ${CAMPOS_FORMULARIO.map(([campo,, , span])=>`
+              <div class="campo" style="margin:0;grid-column:span ${span}">
+                <label for="cr_${campo}">${t(campo)} *</label>
+                <input id="cr_${campo}" autocomplete="off"></div>`).join("")}
+          </div>
+        </div>
+
+        <div class="cartao cartao-pad" style="margin-bottom:14px">
+          <h3 style="margin-bottom:4px">${t("cartaoCnpj")} *</h3>
+          <p style="color:var(--texto-2);font-size:12.5px;margin:0 0 10px">${t("cartaoCnpjNota")}</p>
+          <input type="file" id="cr_arquivo" accept="application/pdf,.pdf">
+        </div>
+
+        <div class="cartao cartao-pad" style="margin-bottom:14px">
+          <h3 style="margin-bottom:4px">${t("acessoPlataforma")}</h3>
+          <p style="color:var(--texto-2);font-size:12.5px;margin:0 0 12px">${t("acessoNota")}</p>
+          <div class="grade g2">
+            <div class="campo" style="margin:0"><label>${t("usuario")}</label>
+              <input id="cr_login" disabled placeholder="${t("emailViraLogin")}"></div>
+            <div class="campo" style="margin:0"><label for="cr_senha">${t("senha")} *</label>
+              <input id="cr_senha" type="password" autocomplete="new-password"></div>
+            <div class="campo" style="margin:0"><label for="cr_senha2">${t("repetirSenha")} *</label>
+              <input id="cr_senha2" type="password" autocomplete="new-password"></div>
+          </div>
+        </div>
+
+        <div id="cr_aviso"></div>
+        <div class="barra-acoes">
+          <button class="btn" id="btEnviarCred">${t("enviarSolicitacao")}</button>
+          <button class="btn neutro" id="btCancelarCred">${t("cancelar")}</button>
+        </div>
+      </main>
+    </div>`;
+
+  CAMPOS_FORMULARIO.forEach(([campo, , tipoMascara])=>{
+    if (tipoMascara) mascara(id("cr_"+campo), tipoMascara);
+  });
+  id("cr_email").addEventListener("input", ()=>{ id("cr_login").value = id("cr_email").value.toLowerCase(); });
+
+  const voltar = ()=>{ estado.tela = "login"; desenhar(); };
+  id("btVoltarLogin").onclick = voltar;
+  id("btCancelarCred").onclick = voltar;
+
+  id("btEnviarCred").onclick = async ()=>{
+    const faltando = CAMPOS_FORMULARIO.filter(([campo])=> !val("cr_"+campo)).map(([campo])=> t(campo));
+    const arquivo = id("cr_arquivo").files[0];
+    if (!arquivo) faltando.push(t("cartaoCnpj"));
+    if (faltando.length > 0){
+      id("cr_aviso").innerHTML = `<div class="aviso alerta" style="margin-bottom:12px">
+        <h4>${t("faltando")}</h4><ul>${faltando.map(x=>`<li>${esc(x)}</li>`).join("")}</ul></div>`;
+      return;
+    }
+    if (arquivo.type !== "application/pdf" && !arquivo.name.toLowerCase().endsWith(".pdf")){
+      torrada(t("somentePdf"), "erro"); return;
+    }
+    if (arquivo.size > 5*1024*1024){ torrada(t("arquivoGrande"), "erro"); return; }
+    if (id("cr_senha").value !== id("cr_senha2").value){ torrada(t("senhasDiferentes"), "erro"); return; }
+
+    const botao = id("btEnviarCred");
+    botao.disabled = true; botao.textContent = t("enviandoArquivo");
+    try{
+      const dados = {};
+      CAMPOS_FORMULARIO.forEach(([campo])=>{ dados[campo] = val("cr_"+campo); });
+      dados.senha = id("cr_senha").value;
+      dados.cartaoCnpj = { nome: arquivo.name, conteudo: await lerArquivo(arquivo) };
+      await api("credenciamento.solicitar", dados);
+      alvo.innerHTML = `
+        <div class="login-wrap"><section class="login-form"><div class="login-card">
+          <div class="aviso ok"><h4>${t("solicitacaoEnviada")}</h4>${t("solicitacaoEnviadaNota")}</div>
+          <button class="btn" id="btIrLogin" style="width:100%;justify-content:center;margin-top:14px">${t("entrar")}</button>
+        </div></section></div>`;
+      id("btIrLogin").onclick = voltar;
+    }catch(e){
+      torrada(e.message, "erro", e.codigo);
+      botao.disabled = false; botao.textContent = t("enviarSolicitacao");
+    }
+  };
+}
+
+/* -------------------------------------------------------------------
+   Fila do credenciador
+   ------------------------------------------------------------------- */
+async function telaCredenciamentos(alvo){
+  carregando(alvo);
+  try{
+    const r = await api("credenciamento.listar", { status: estado.dados.status || "" });
+    const filtros = ["", ...ETAPAS_CREDENCIAMENTO, "RECUSADO"];
+    alvo.innerHTML = `
+      <div class="cabeca">
+        <div><h1>${t("credenciamentos")}</h1><p>${r.parceiros.length} ${idioma==="pt-BR"?"solicitacoes":"requests"}</p></div>
+      </div>
+      <div class="barra-acoes" style="margin-bottom:16px">
+        ${filtros.map(f=>`<button class="btn ${(estado.dados.status||"")===f?"":"neutro"} pequeno" data-filtro="${f}">
+          ${f?t("cr"+f):(idioma==="pt-BR"?"Todos":"All")}</button>`).join("")}
+      </div>
+      ${r.parceiros.length===0?`<div class="cartao vazio"><h3>${t("semCredenciamentos")}</h3></div>`:`
+      <div class="cartao tabela-rolagem"><table>
+        <thead><tr>
+          <th>${t("razaoSocial")}</th><th>${t("cnpj")}</th><th>${t("cidade")}</th>
+          <th>${t("pessoaContato")}</th><th>${t("documentos")}</th><th>${t("status")}</th><th></th>
+        </tr></thead>
+        <tbody>${r.parceiros.map(p=>`<tr>
+          <td><b>${esc(p.razaoSocial||p.nome)}</b><br><small style="color:var(--texto-2)">${dataHora(p.criadoEm)}</small></td>
+          <td class="mono">${esc(p.cnpj||"—")}</td>
+          <td>${esc(p.cidade||"—")}${p.estado?"/"+esc(p.estado):""}</td>
+          <td>${esc(p.pessoaContato||"—")}<br><small style="color:var(--texto-2)">${esc(p.email||"")}</small></td>
+          <td><small class="mono" style="color:var(--texto-2)">
+            ${p.temCartaoCnpj?"CNPJ ✓":"CNPJ —"}<br>${p.temContratoAssinado?"Contrato ✓":"Contrato —"}</small></td>
+          <td>${seloCredenciamento(p.status)}</td>
+          <td><button class="btn neutro pequeno" data-abrir="${p.id}">${t("analisar")}</button></td>
+        </tr>`).join("")}</tbody>
+      </table></div>`}`;
+
+    alvo.querySelectorAll("[data-filtro]").forEach(b=> b.onclick = ()=>irPara("credenciamentos",{status:b.dataset.filtro}));
+    alvo.querySelectorAll("[data-abrir]").forEach(b=> b.onclick = ()=>irPara("credenciamentoDetalhe",{id:b.dataset.abrir}));
+  }catch(e){ alvo.innerHTML = `<div class="aviso perigo">${esc(e.message)}</div>`; }
+}
+
+/* -------------------------------------------------------------------
+   Linha do tempo, compartilhada pelas duas telas
+   ------------------------------------------------------------------- */
+function linhaDoTempo(status){
+  if (status === "RECUSADO"){
+    return `<div class="aviso perigo"><b>${t("crRECUSADO")}</b></div>`;
+  }
+  const atual = ETAPAS_CREDENCIAMENTO.indexOf(status);
+  return `<div class="etapas">${ETAPAS_CREDENCIAMENTO.map((etapa, i)=>`
+    <div class="etapa ${i < atual ? "feita" : i === atual ? "agora" : ""}">
+      <div class="bolha">${i < atual ? "✓" : i+1}</div>
+      <div class="rotulo">${t("cr"+etapa)}</div>
+    </div>`).join("")}</div>`;
+}
+
+/* -------------------------------------------------------------------
+   Detalhe para o credenciador
+   ------------------------------------------------------------------- */
+async function telaCredenciamentoDetalhe(alvo){
+  carregando(alvo);
+  try{
+    const r = await api("credenciamento.detalhe", { id: estado.dados.id });
+    const p = r.parceiro;
+    const custos = r.custos.length
+      ? r.custos.map(c=>({...c}))
+      : [{descricao:"",tipo:"ap",valor:0}];
+    const TIPOS = tiposCusto();
+    const cartao = r.anexos.find(x=>x.tipo==="cartaoCnpj");
+    const assinado = r.anexos.find(x=>x.tipo==="contratoAssinado");
+
+    alvo.innerHTML = `
+      <div class="cabeca">
+        <div><h1>${esc(p.razaoSocial||p.nome)}</h1>
+          <p class="mono">${esc(p.cnpj)} · ${esc(p.cidade)}${p.estado?"/"+esc(p.estado):""}</p></div>
+        <button class="btn neutro" id="btVoltar">${t("voltar")}</button>
+      </div>
+
+      <div class="cartao cartao-pad" style="margin-bottom:16px">${linhaDoTempo(p.status)}</div>
+      ${p.motivoRecusa?`<div class="aviso perigo" style="margin-bottom:16px">
+        <h4>${t("motivoRecusa")}</h4>${esc(p.motivoRecusa)}</div>`:""}
+
+      <div class="grade g2" style="align-items:start">
+        <div class="cartao cartao-pad">
+          <h3 style="margin-bottom:12px">${t("dadosEmpresa")}</h3>
+          <table><tbody>
+            ${[["razaoSocial",p.razaoSocial],["cnpj",p.cnpj],
+               ["inscricaoEstadual",p.inscricaoEstadual],["inscricaoMunicipal",p.inscricaoMunicipal],
+               ["rua",`${p.rua}, ${p.numero} — ${p.bairro}`],
+               ["cidade",`${p.cidade}/${p.estado} — ${p.cep}`],
+               ["telefone",`(${p.ddd}) ${p.telefone}`],["celular",`(${p.ddd}) ${p.celular}`],
+               ["pessoaContato",p.pessoaContato],["email",p.email],
+               ["representanteNome",p.representanteNome],["representanteCpf",p.representanteCpf],
+               ["representanteEmail",p.representanteEmail],["representanteTelefone",p.representanteTelefone],
+              ].map(([chave,valor])=>`<tr>
+                <th style="width:44%">${t(chave)}</th><td>${esc(valor||"—")}</td></tr>`).join("")}
+          </tbody></table>
+          <div class="barra-acoes" style="margin-top:12px">
+            ${cartao?`<button class="btn neutro pequeno" data-baixar="${cartao.id}">${t("cartaoCnpj")} (PDF)</button>`
+                    :`<span class="selo ambar">${t("semCartaoCnpj")}</span>`}
+            ${assinado?`<button class="btn neutro pequeno" data-baixar="${assinado.id}">${t("contratoAssinado")} (PDF)</button>`:""}
+          </div>
+        </div>
+
+        <div>
+          <div class="cartao cartao-pad" style="margin-bottom:14px">
+            <h3 style="margin-bottom:4px">${t("condicoesContrato")}</h3>
+            <p style="color:var(--texto-2);font-size:12.5px;margin:0 0 12px">${t("condicoesNota")}</p>
+            <div class="campo"><label for="crRegiao">${t("regiaoAtuacao")} *</label>
+              <input id="crRegiao" value="${esc(p.regiaoAtuacao||"")}"></div>
+            <div class="grade g2">
+              <div class="campo"><label for="crPrazo">${t("prazoPagamento")}</label>
+                <input id="crPrazo" type="number" min="1" class="num" value="${p.prazoPagamento||30}"></div>
+              <div class="campo"><label for="crVigencia">${t("vigenciaMeses")}</label>
+                <input id="crVigencia" type="number" min="1" class="num" value="${p.vigenciaMeses||12}"></div>
+            </div>
+            <div class="escolha" style="margin-bottom:14px">
+              <input type="checkbox" id="crMisc" ${p.compraMiscelaneos?"checked":""}>
+              <div class="info"><b><label for="crMisc" style="margin:0;color:var(--texto);font-size:13.5px">${t("compraMiscelaneos")}</label></b>
+                <small style="color:var(--texto-2)">${t("compraMiscelaneosNota")}</small></div>
+            </div>
+
+            <h3 style="margin-bottom:4px">${t("valoresNegociados")}</h3>
+            <p style="color:var(--texto-2);font-size:12.5px;margin:0 0 10px">${t("valoresNota")}</p>
+            <div id="crCustos"></div>
+            <button class="btn neutro pequeno" id="btAddValor" style="margin-bottom:14px">+ ${t("adicionarCusto")}</button>
+
+            <div class="campo"><label for="crObs">${t("observacao")}</label>
+              <textarea id="crObs">${esc(p.observacaoContrato||"")}</textarea></div>
+
+            <div class="barra-acoes">
+              <button class="btn" id="btGerar">${p.contratoGeradoEm?t("regerarContrato"):t("gerarContrato")}</button>
+              ${r.temContrato?`<button class="btn neutro" id="btVerContrato">${t("verContrato")}</button>`:""}
+            </div>
+          </div>
+
+          <div class="cartao cartao-pad">
+            <h3 style="margin-bottom:12px">${t("decisaoCredenciamento")}</h3>
+            <div class="campo"><label for="crMotivo">${t("observacao")}</label>
+              <textarea id="crMotivo" placeholder="${t("motivoNota")}"></textarea></div>
+            <div class="barra-acoes">
+              <button class="btn ok" data-decisao="ativar">${t("ativarParceiro")}</button>
+              <button class="btn perigo" data-decisao="recusar">${t("recusar")}</button>
+            </div>
+          </div>
+        </div>
+      </div>`;
+
+    function montarCustos(){
+      const cont = id("crCustos");
+      cont.innerHTML = custos.map((c,i)=>`
+        <div style="border:1px solid var(--linha);border-radius:9px;padding:9px;margin-bottom:8px">
+          <div style="display:grid;grid-template-columns:1fr 130px 34px;gap:7px;align-items:center">
+            <select data-ct="${i}">${TIPOS.map(([v,rot])=>`<option value="${v}" ${c.tipo===v?"selected":""}>${rot}</option>`).join("")}</select>
+            <input class="num" inputmode="numeric" value="${dinheiro(c.valor)}" data-cv="${i}">
+            <button class="btn neutro pequeno" data-cx="${i}">×</button>
+          </div>
+          ${c.tipo==="outro"?`<input style="margin-top:7px" value="${esc(c.descricao)}"
+            placeholder="${t("descricaoObrigatoria")}" data-cd="${i}">`:""}
+        </div>`).join("");
+      cont.querySelectorAll("[data-ct]").forEach(sel=> sel.onchange = ()=>{
+        custos[Number(sel.dataset.ct)].tipo = sel.value;
+        if (sel.value !== "outro") custos[Number(sel.dataset.ct)].descricao = "";
+        montarCustos();
+      });
+      cont.querySelectorAll("[data-cv]").forEach(inp=> inp.addEventListener("input", ()=>{
+        custos[Number(inp.dataset.cv)].valor = formatarMoeda(inp);
+      }));
+      cont.querySelectorAll("[data-cd]").forEach(inp=> inp.addEventListener("input", ()=>{
+        custos[Number(inp.dataset.cd)].descricao = inp.value;
+      }));
+      cont.querySelectorAll("[data-cx]").forEach(bt=> bt.onclick = ()=>{
+        custos.splice(Number(bt.dataset.cx),1);
+        if (custos.length===0) custos.push({descricao:"",tipo:"ap",valor:0});
+        montarCustos();
+      });
+    }
+    montarCustos();
+
+    id("btAddValor").onclick = ()=>{ custos.push({descricao:"",tipo:"ap",valor:0}); montarCustos(); };
+    id("btVoltar").onclick = ()=>irPara("credenciamentos");
+
+    id("btGerar").onclick = async ()=>{
+      try{
+        await api("credenciamento.analisar", {
+          id: p.id, regiaoAtuacao: val("crRegiao"),
+          prazoPagamento: numVal("crPrazo"), vigenciaMeses: numVal("crVigencia"),
+          compraMiscelaneos: id("crMisc").checked,
+          observacaoContrato: val("crObs"), custos,
+        });
+        torrada(t("contratoGerado"), "ok");
+        desenhar();
+      }catch(e){ torrada(e.message, "erro", e.codigo); }
+    };
+
+    if (id("btVerContrato")) id("btVerContrato").onclick = ()=>abrirContrato(p.id);
+
+    alvo.querySelectorAll("[data-baixar]").forEach(bt=> bt.onclick = async ()=>{
+      try{
+        const link = await api("credenciamento.linkAnexo", { id: bt.dataset.baixar });
+        window.open(link.url, "_blank");
+      }catch(e){ torrada(e.message, "erro", e.codigo); }
+    });
+
+    alvo.querySelectorAll("[data-decisao]").forEach(bt=> bt.onclick = async ()=>{
+      const decisao = bt.dataset.decisao;
+      const motivo = val("crMotivo");
+      if (decisao === "recusar" && !motivo){ torrada(t("motivoObrigatorio"), "erro"); id("crMotivo").focus(); return; }
+      try{
+        await api("credenciamento.decidir", { id: p.id, decisao, motivo });
+        torrada(t("salvo"), "ok");
+        irPara("credenciamentos");
+      }catch(e){ torrada(e.message, "erro", e.codigo); }
+    });
+  }catch(e){ alvo.innerHTML = `<div class="aviso perigo">${esc(e.message)}</div>`; }
+}
+
+/* Abre o contrato numa aba nova, pronto para imprimir em PDF. */
+async function abrirContrato(id){
+  try{
+    const r = await api("credenciamento.contrato", { id: id || "" });
+    const aba = window.open("", "_blank");
+    if (!aba){ torrada(t("permitaPopup"), "erro"); return; }
+    aba.document.open();
+    aba.document.write(r.html);
+    aba.document.close();
+  }catch(e){ torrada(e.message, "erro", e.codigo); }
+}
+
+/* -------------------------------------------------------------------
+   Tela do parceiro: acompanha o processo e entrega o contrato assinado
+   ------------------------------------------------------------------- */
+async function telaMeuCredenciamento(alvo){
+  carregando(alvo);
+  try{
+    const r = await api("credenciamento.detalhe", {});
+    const p = r.parceiro;
+    const assinado = r.anexos.find(x=>x.tipo==="contratoAssinado");
+    const cartao = r.anexos.find(x=>x.tipo==="cartaoCnpj");
+
+    const passo = {
+      AGUARDANDO_ANALISE: t("passoAguardando"),
+      EM_ANALISE: t("passoEmAnalise"),
+      CONTRATO_GERADO: t("passoAssinar"),
+      AGUARDANDO_CONFERENCIA: t("passoConferencia"),
+      ATIVO: t("passoAtivo"),
+      RECUSADO: t("passoRecusado"),
+    }[p.status] || "";
+
+    alvo.innerHTML = `
+      <div class="cabeca">
+        <div><h1>${t("meuCredenciamento")}</h1><p>${esc(p.razaoSocial)}</p></div>
+      </div>
+
+      <div class="cartao cartao-pad" style="margin-bottom:16px">
+        ${linhaDoTempo(p.status)}
+        <div class="aviso ${p.status==="ATIVO"?"ok":p.status==="RECUSADO"?"perigo":"info"}" style="margin-top:16px">
+          ${esc(passo)}</div>
+        ${p.motivoRecusa?`<div class="aviso alerta" style="margin-top:12px">
+          <h4>${t("motivoRecusa")}</h4>${esc(p.motivoRecusa)}</div>`:""}
+      </div>
+
+      ${r.temContrato?`
+      <div class="cartao cartao-pad" style="margin-bottom:16px">
+        <h3 style="margin-bottom:4px">${t("contrato")}</h3>
+        <p style="color:var(--texto-2);font-size:12.5px;margin:0 0 12px">${t("contratoNota")}</p>
+        <div class="barra-acoes">
+          <button class="btn" id="btBaixarContrato">${t("verContrato")}</button>
+        </div>
+
+        <hr style="border:0;border-top:1px solid var(--linha);margin:16px 0">
+        <h3 style="margin-bottom:4px">${t("contratoAssinado")}</h3>
+        <p style="color:var(--texto-2);font-size:12.5px;margin:0 0 10px">${t("enviarAssinadoNota")}</p>
+        <div class="anexo ${assinado?"":"vazio-arq"}">
+          ${assinado?`
+            <div class="arquivo">${esc(assinado.nomeArquivo)}</div>
+            <small style="color:var(--texto-2)">${tamanhoLegivel(assinado.tamanho)} · ${dataHora(assinado.criadoEm)}</small>`
+          :`<small style="color:var(--texto-2)">${t("semAnexo")}</small>`}
+          <div class="barra-acoes" style="margin-top:10px">
+            ${assinado?`<button class="btn neutro pequeno" data-baixar="${assinado.id}">${t("baixar")}</button>`:""}
+            ${p.status!=="ATIVO"?`<button class="btn neutro pequeno" id="btEnviarAssinado">
+              ${assinado?t("trocarArquivo"):t("anexar")}</button>`:""}
+          </div>
+          <input type="file" id="crArquivoAssinado" accept="application/pdf,.pdf" style="display:none">
+        </div>
+      </div>`:""}
+
+      <div class="cartao cartao-pad">
+        <h3 style="margin-bottom:12px">${t("dadosEmpresa")}</h3>
+        <table><tbody>
+          ${[["razaoSocial",p.razaoSocial],["cnpj",p.cnpj],
+             ["rua",`${p.rua}, ${p.numero} — ${p.bairro}`],
+             ["cidade",`${p.cidade}/${p.estado} — ${p.cep}`],
+             ["pessoaContato",p.pessoaContato],["email",p.email],
+             ["representanteNome",p.representanteNome],
+            ].map(([chave,valor])=>`<tr><th style="width:40%">${t(chave)}</th>
+              <td>${esc(valor||"—")}</td></tr>`).join("")}
+        </tbody></table>
+        ${cartao?`<div class="barra-acoes" style="margin-top:12px">
+          <button class="btn neutro pequeno" data-baixar="${cartao.id}">${t("cartaoCnpj")} (PDF)</button></div>`:""}
+      </div>`;
+
+    if (id("btBaixarContrato")) id("btBaixarContrato").onclick = ()=>abrirContrato("");
+
+    if (id("btEnviarAssinado")){
+      const campo = id("crArquivoAssinado");
+      id("btEnviarAssinado").onclick = ()=> campo.click();
+      campo.onchange = async ()=>{
+        const arquivo = campo.files[0];
+        if (!arquivo) return;
+        if (arquivo.type !== "application/pdf" && !arquivo.name.toLowerCase().endsWith(".pdf")){
+          torrada(t("somentePdf"), "erro"); campo.value=""; return;
+        }
+        if (arquivo.size > 5*1024*1024){ torrada(t("arquivoGrande"), "erro"); campo.value=""; return; }
+        try{
+          await api("credenciamento.anexar", {
+            tipo: "contratoAssinado", nome: arquivo.name,
+            conteudo: await lerArquivo(arquivo),
+          });
+          torrada(t("salvo"), "ok");
+          desenhar();
+        }catch(e){ torrada(e.message, "erro", e.codigo); }
+      };
+    }
+
+    alvo.querySelectorAll("[data-baixar]").forEach(bt=> bt.onclick = async ()=>{
+      try{
+        const link = await api("credenciamento.linkAnexo", { id: bt.dataset.baixar });
+        window.open(link.url, "_blank");
+      }catch(e){ torrada(e.message, "erro", e.codigo); }
+    });
+  }catch(e){ alvo.innerHTML = `<div class="aviso perigo">${esc(e.message)}</div>`; }
+}
+
+/* ===================================================================
    10b. TELA — GASTOS DE UM INEP
    Mostra a composicao do gasto e cada pedido atribuido aquela escola.
    =================================================================== */
@@ -1874,6 +2479,7 @@ function modalUsuario(u){
       <select id="uPerfil">
         <option value="admin" ${u&&u.perfil==="admin"?"selected":""}>${t("perfilAdmin")}</option>
         <option value="financeiro" ${u&&u.perfil==="financeiro"?"selected":""}>${t("perfilFinanceiro")}</option>
+        <option value="credenciador" ${u&&u.perfil==="credenciador"?"selected":""}>${t("perfilCredenciador")}</option>
         <option value="comprador" ${!u||u.perfil==="comprador"?"selected":""}>${t("perfilComprador")}</option>
       </select></div>
     ${novo?"":`<div class="campo"><label for="uAtivo">${t("status")}</label>
