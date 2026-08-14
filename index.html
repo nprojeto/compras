@@ -412,12 +412,13 @@ const IDIOMAS = {
     minhasEscolas:"Minhas escolas", meusValores:"Meus valores",
     semEscolasParceiro:"Nenhuma escola atribuida a voce ainda.",
     semEscolasParceiroNota:"Assim que a Novale atribuir uma escola, ela aparece aqui com os valores.",
-    totalPrevisto:"Previsto no total", totalRealizado:"Ja instalado",
-    aReceber:"A receber", recebido:"Recebido", aInstalar:"Falta instalar",
-    escolasConcluidas:"Concluidas", tabelaValores:"Valores do seu contrato",
+    valorContrato:"Valor no contrato", emExecucao:"Em execucao",
+    aReceber:"A receber", recebido:"Recebido",
+    finalizadas:"Finalizadas", pagas:"Pagas", tabelaValores:"Valores do seu contrato",
     tabelaValoresNota:"Sao estes valores que geram os numeros abaixo.",
-    colPrevisto:"Previsto", colRealizado:"Instalado", colAReceber:"A receber",
-    porEscolaNota:"Previsto usa os APs previstos; instalado usa os APs ja instalados.",
+    colValor:"Valor", colSituacao:"Situacao",
+    porEscolaNota:"O calculo usa os APs instalados; enquanto nao ha instalacao, os previstos. Rack segue a quantidade do cadastro da escola. Os demais valores contam uma vez por escola.",
+    soFinalizadaNota:"O valor entra em \"a receber\" quando a escola e finalizada.",
     aguardandoCredenciamento:"Seu credenciamento ainda esta em andamento.",
     passoAguardando:"Recebemos sua solicitacao. Um credenciador vai analisar os dados.",
     passoEmAnalise:"Seus dados estao em analise.",
@@ -622,12 +623,13 @@ const IDIOMAS = {
     minhasEscolas:"My schools", meusValores:"My rates",
     semEscolasParceiro:"No school assigned to you yet.",
     semEscolasParceiroNota:"As soon as Novale assigns a school, it shows up here with the amounts.",
-    totalPrevisto:"Planned total", totalRealizado:"Installed so far",
-    aReceber:"To receive", recebido:"Received", aInstalar:"Left to install",
-    escolasConcluidas:"Completed", tabelaValores:"Your contract rates",
+    valorContrato:"Contract value", emExecucao:"In progress",
+    aReceber:"To receive", recebido:"Received",
+    finalizadas:"Completed", pagas:"Paid", tabelaValores:"Your contract rates",
     tabelaValoresNota:"These rates produce the numbers below.",
-    colPrevisto:"Planned", colRealizado:"Installed", colAReceber:"To receive",
-    porEscolaNota:"Planned uses the planned APs; installed uses the APs already installed.",
+    colValor:"Amount", colSituacao:"Status",
+    porEscolaNota:"The calculation uses installed APs; while none are installed, the planned ones. Racks follow the school record. Other rates count once per school.",
+    soFinalizadaNota:"The amount moves to \"to receive\" once the school is completed.",
     aguardandoCredenciamento:"Your accreditation is still in progress.",
     passoAguardando:"We received your request. An officer will review the details.",
     passoEmAnalise:"Your details are under review.",
@@ -2367,15 +2369,17 @@ async function telaParceiroPainel(alvo){
       <div class="grade g4" style="margin-bottom:16px">
         <div class="indicador"><div class="rotulo">${t("escolas")}</div>
           <div class="valor">${numero(tt.escolas)}</div>
-          <div class="nota">${numero(tt.concluidas)} ${t("escolasConcluidas").toLowerCase()}</div></div>
-        <div class="indicador"><div class="rotulo">${t("apsInstalados")}</div>
-          <div class="valor">${numero(tt.apsInst)}</div>
-          <div class="nota">${numero(tt.apsPrev)} ${t("apsPrev").toLowerCase()}</div></div>
-        <div class="indicador"><div class="rotulo">${t("totalPrevisto")}</div>
-          <div class="valor">${dinheiro(tt.previsto)}</div>
-          <div class="nota">${t("aInstalar")}: ${dinheiro(tt.aInstalar)}</div></div>
-        <div class="indicador"><div class="rotulo">${t("totalRealizado")}</div>
-          <div class="valor">${dinheiro(tt.realizado)}</div></div>
+          <div class="nota">${numero(tt.finalizadas)} ${t("finalizadas").toLowerCase()} ·
+            ${numero(tt.pagas)} ${t("pagas").toLowerCase()}</div></div>
+        <div class="indicador"><div class="rotulo">${t("apsBase")}</div>
+          <div class="valor">${numero(tt.apsBase)}</div>
+          <div class="nota">${numero(tt.apsInst)} ${t("apsInstalados").toLowerCase()} ·
+            ${numero(tt.apsPrev)} ${t("apsPrev").toLowerCase()}</div></div>
+        <div class="indicador"><div class="rotulo">${t("valorContrato")}</div>
+          <div class="valor">${dinheiro(tt.valor)}</div></div>
+        <div class="indicador"><div class="rotulo">${t("emExecucao")}</div>
+          <div class="valor">${dinheiro(tt.emExecucao)}</div>
+          <div class="nota">${t("soFinalizadaNota")}</div></div>
         <div class="indicador ok"><div class="rotulo">${t("aReceber")}</div>
           <div class="valor">${dinheiro(tt.aReceber)}</div></div>
         <div class="indicador"><div class="rotulo">${t("recebido")}</div>
@@ -2408,26 +2412,27 @@ async function telaParceiroPainel(alvo){
           <thead><tr>
             <th>${t("inep")}</th><th>${t("escola")}</th><th>${t("status")}</th>
             <th class="num">${t("aps")}</th>
-            <th class="num">${t("colPrevisto")}</th>
-            <th class="num">${t("colRealizado")}</th>
-            <th class="num">${t("colAReceber")}</th>
+            <th class="num">${t("racks")}</th>
+            <th class="num">${t("colValor")}</th>
+            <th>${t("colSituacao")}</th>
           </tr></thead>
           <tbody>${r.escolas.map(e=>`<tr>
             <td class="mono">${esc(e.inep)}</td>
             <td><b>${esc(e.escola)}</b><br><small style="color:var(--texto-2)">${esc(e.cidade)}${e.uf?"/"+esc(e.uf):""} · ${esc(e.projeto||"—")}</small></td>
             <td>${seloEscola(e.status)}
               ${e.dataNf?`<br><small class="mono" style="color:var(--texto-2)">${esc(e.dataNf.split("-").reverse().join("/"))}</small>`:""}</td>
-            <td class="num mono">${numero(e.qtdApsInst)} / ${numero(e.qtdApsPrev)}</td>
-            <td class="num mono">${dinheiro(e.previsto)}</td>
-            <td class="num mono">${dinheiro(e.realizado)}</td>
-            <td class="num mono" style="color:${e.recebido>0?"var(--ok)":"var(--texto)"}">
-              ${e.recebido>0?dinheiro(e.recebido)+" ✓":dinheiro(e.aReceber)}</td>
+            <td class="num mono">${numero(e.qtdApsInst)} / ${numero(e.qtdApsPrev)}
+              ${e.usandoPrevisto?`<br><small style="color:var(--alerta);font-family:Inter,sans-serif">${t("usandoPrevisto")}</small>`:""}</td>
+            <td class="num mono">${numero(e.qtdRacks)}</td>
+            <td class="num mono">${dinheiro(e.valor)}</td>
+            <td>${e.recebido>0?`<span class="selo verde">${t("recebido")} ${dinheiro(e.recebido)}</span>`
+              : e.aReceber>0?`<span class="selo azul">${t("aReceber")} ${dinheiro(e.aReceber)}</span>`
+              : `<span class="selo cinza">${t("emExecucao")}</span>`}</td>
           </tr>`).join("")}
           <tr>
-            <td colspan="4" style="text-align:right"><b>${t("colTotal")}</b></td>
-            <td class="num mono"><b>${dinheiro(tt.previsto)}</b></td>
-            <td class="num mono"><b>${dinheiro(tt.realizado)}</b></td>
-            <td class="num mono"><b>${dinheiro(tt.aReceber)}</b></td>
+            <td colspan="5" style="text-align:right"><b>${t("colTotal")}</b></td>
+            <td class="num mono"><b>${dinheiro(tt.valor)}</b></td>
+            <td><b class="mono">${t("aReceber")}: ${dinheiro(tt.aReceber)}</b></td>
           </tr></tbody>
         </table>
       </div>
