@@ -398,6 +398,27 @@ const IDIOMAS = {
     aguardandoEnvio:"Nenhum arquivo escolhido ainda.",
     contratoRecebido:"Contrato assinado recebido",
     confiraAntes:"Abra o PDF e confira a assinatura antes de ativar.",
+    novoCredenciamento:"Abrir novo credenciamento",
+    solicitarNovo:"Solicitar novo credenciamento",
+    travadoAviso:"Credenciamento ativo. Valores e documentos estao travados.",
+    travadoNota:"Para alterar qualquer coisa, abra um novo credenciamento.",
+    motivoReabertura:"Por que abrir um novo credenciamento?",
+    motivoReaberturaNota:"Ex.: reajuste de valores, mudanca de regiao, troca de representante.",
+    confirmarReabertura:"Abrir",
+    revisao:"Revisao", contratoVigente:"Contrato vigente",
+    emRevisao:"Em revisao", valoresVigentes:"Valores vigentes",
+    valoresEmAnalise:"Valores em analise", valoresSoValemDepois:"Passam a valer quando o parceiro for ativado.",
+    reabertoEm:"Novo credenciamento aberto em",
+    minhasEscolas:"Minhas escolas", meusValores:"Meus valores",
+    semEscolasParceiro:"Nenhuma escola atribuida a voce ainda.",
+    semEscolasParceiroNota:"Assim que a Novale atribuir uma escola, ela aparece aqui com os valores.",
+    totalPrevisto:"Previsto no total", totalRealizado:"Ja instalado",
+    aReceber:"A receber", recebido:"Recebido", aInstalar:"Falta instalar",
+    escolasConcluidas:"Concluidas", tabelaValores:"Valores do seu contrato",
+    tabelaValoresNota:"Sao estes valores que geram os numeros abaixo.",
+    colPrevisto:"Previsto", colRealizado:"Instalado", colAReceber:"A receber",
+    porEscolaNota:"Previsto usa os APs previstos; instalado usa os APs ja instalados.",
+    aguardandoCredenciamento:"Seu credenciamento ainda esta em andamento.",
     passoAguardando:"Recebemos sua solicitacao. Um credenciador vai analisar os dados.",
     passoEmAnalise:"Seus dados estao em analise.",
     passoAssinar:"Contrato disponivel. Baixe, assine e envie o PDF assinado.",
@@ -587,6 +608,27 @@ const IDIOMAS = {
     aguardandoEnvio:"No file chosen yet.",
     contratoRecebido:"Signed contract received",
     confiraAntes:"Open the PDF and check the signature before activating.",
+    novoCredenciamento:"Open new accreditation",
+    solicitarNovo:"Request new accreditation",
+    travadoAviso:"Accreditation active. Rates and documents are locked.",
+    travadoNota:"To change anything, open a new accreditation.",
+    motivoReabertura:"Why open a new accreditation?",
+    motivoReaberturaNota:"E.g. rate revision, coverage change, new representative.",
+    confirmarReabertura:"Open",
+    revisao:"Revision", contratoVigente:"Active contract",
+    emRevisao:"Under revision", valoresVigentes:"Active rates",
+    valoresEmAnalise:"Rates under review", valoresSoValemDepois:"They apply once the partner is activated.",
+    reabertoEm:"New accreditation opened on",
+    minhasEscolas:"My schools", meusValores:"My rates",
+    semEscolasParceiro:"No school assigned to you yet.",
+    semEscolasParceiroNota:"As soon as Novale assigns a school, it shows up here with the amounts.",
+    totalPrevisto:"Planned total", totalRealizado:"Installed so far",
+    aReceber:"To receive", recebido:"Received", aInstalar:"Left to install",
+    escolasConcluidas:"Completed", tabelaValores:"Your contract rates",
+    tabelaValoresNota:"These rates produce the numbers below.",
+    colPrevisto:"Planned", colRealizado:"Installed", colAReceber:"To receive",
+    porEscolaNota:"Planned uses the planned APs; installed uses the APs already installed.",
+    aguardandoCredenciamento:"Your accreditation is still in progress.",
     passoAguardando:"We received your request. An officer will review the details.",
     passoEmAnalise:"Your details are under review.",
     passoAssinar:"Contract available. Download, sign and upload the signed PDF.",
@@ -762,7 +804,10 @@ function menuDoPerfil(){
   const p = estado.usuario.perfil;
 
   // O parceiro so acompanha o proprio credenciamento.
-  if (p === "parceiro") return [{ chave:"meuCredenciamento", texto:t("meuCredenciamento") }];
+  if (p === "parceiro") return [
+    { chave:"parceiroPainel", texto:t("minhasEscolas") },
+    { chave:"meuCredenciamento", texto:t("meuCredenciamento") },
+  ];
   if (p === "credenciador") return [{ chave:"credenciamentos", texto:t("credenciamentos") }];
   const itens = [{ chave:"painel", texto:t("painel") }];
   itens.push({ chave:"escolas", texto:t("escolas") });
@@ -791,6 +836,7 @@ const TELAS = {
   credenciamentos: telaCredenciamentos,
   credenciamentoDetalhe: telaCredenciamentoDetalhe,
   meuCredenciamento: telaMeuCredenciamento,
+  parceiroPainel: telaParceiroPainel,
   escolas: telaEscolas,
   escolaForm: telaEscolaForm,
   escolaDetalhe: telaEscolaDetalhe,
@@ -900,7 +946,7 @@ function telaLogin(alvo){
       estado.token = r.token; estado.usuario = r.usuario;
       guardar("token", r.token);
       estado.tela = r.usuario.precisaTrocarSenha ? "trocarSenha"
-        : r.usuario.perfil === "parceiro" ? "meuCredenciamento"
+        : r.usuario.perfil === "parceiro" ? "parceiroPainel"
         : r.usuario.perfil === "credenciador" ? "credenciamentos" : "painel";
       desenhar();
     }catch(e){
@@ -2067,9 +2113,9 @@ async function telaCredenciamentoDetalhe(alvo){
   try{
     const r = await api("credenciamento.detalhe", { id: estado.dados.id });
     const p = r.parceiro;
-    const custos = r.custos.length
-      ? r.custos.map(c=>({...c}))
-      : [{descricao:"",tipo:"ap",valor:0}];
+    // Em revisao, edita os pendentes; sem revisao, os que estao valendo.
+    const base = r.custosEmEdicao && r.custosEmEdicao.length ? r.custosEmEdicao : r.custos;
+    const custos = base.length ? base.map(c=>({...c})) : [{descricao:"",tipo:"ap",valor:0}];
     const TIPOS = tiposCusto();
     const cartao = r.anexos.find(x=>x.tipo==="cartaoCnpj");
     const assinado = r.anexos.find(x=>x.tipo==="contratoAssinado");
@@ -2077,11 +2123,22 @@ async function telaCredenciamentoDetalhe(alvo){
     alvo.innerHTML = `
       <div class="cabeca">
         <div><h1>${esc(p.razaoSocial||p.nome)}</h1>
-          <p class="mono">${esc(p.cnpj)} · ${esc(p.cidade)}${p.estado?"/"+esc(p.estado):""}</p></div>
-        <button class="btn neutro" id="btVoltar">${t("voltar")}</button>
+          <p class="mono">${esc(p.cnpj)} · ${esc(p.cidade)}${p.estado?"/"+esc(p.estado):""}
+            ${Number(p.revisao)>1?` · ${t("revisao")} ${numero(p.revisao)}`:""}</p></div>
+        <div class="barra-acoes">
+          ${r.travado?`<button class="btn" id="btReabrir">${t("novoCredenciamento")}</button>`:""}
+          <button class="btn neutro" id="btVoltar">${t("voltar")}</button>
+        </div>
       </div>
 
-      <div class="cartao cartao-pad" style="margin-bottom:16px">${linhaDoTempo(p.status)}</div>
+      <div class="cartao cartao-pad" style="margin-bottom:16px">
+        ${linhaDoTempo(p.status)}
+        ${r.travado?`<div class="aviso ok" style="margin-top:16px">
+          <h4>${t("travadoAviso")}</h4>${t("travadoNota")}</div>`:""}
+        ${(!r.travado && p.reabertoEm)?`<div class="aviso info" style="margin-top:16px">
+          <h4>${t("reabertoEm")} ${dataHora(p.reabertoEm)} · ${esc(p.reabertoPor)}</h4>
+          ${esc(p.reaberturaMotivo)}</div>`:""}
+      </div>
       ${p.motivoRecusa?`<div class="aviso perigo" style="margin-bottom:16px">
         <h4>${t("motivoRecusa")}</h4>${esc(p.motivoRecusa)}</div>`:""}
 
@@ -2109,7 +2166,8 @@ async function telaCredenciamentoDetalhe(alvo){
         <div>
           <div class="cartao cartao-pad" style="margin-bottom:14px">
             <h3 style="margin-bottom:4px">${t("condicoesContrato")}</h3>
-            <p style="color:var(--texto-2);font-size:12.5px;margin:0 0 12px">${t("condicoesNota")}</p>
+            <p style="color:var(--texto-2);font-size:12.5px;margin:0 0 12px">
+              ${r.travado ? t("travadoNota") : t("condicoesNota")}</p>
             <div class="campo"><label for="crRegiao">${t("regiaoAtuacao")} *</label>
               <input id="crRegiao" value="${esc(p.regiaoAtuacao||"")}"></div>
             <div class="grade g2">
@@ -2124,8 +2182,9 @@ async function telaCredenciamentoDetalhe(alvo){
                 <small style="color:var(--texto-2)">${t("compraMiscelaneosNota")}</small></div>
             </div>
 
-            <h3 style="margin-bottom:4px">${t("valoresNegociados")}</h3>
-            <p style="color:var(--texto-2);font-size:12.5px;margin:0 0 10px">${t("valoresNota")}</p>
+            <h3 style="margin-bottom:4px">${r.travado?t("valoresVigentes"):t("valoresNegociados")}</h3>
+            <p style="color:var(--texto-2);font-size:12.5px;margin:0 0 10px">
+              ${r.custosEmEdicao?t("valoresSoValemDepois"):t("valoresNota")}</p>
             <div id="crCustos"></div>
             <button class="btn neutro pequeno" id="btAddValor" style="margin-bottom:14px">+ ${t("adicionarCusto")}</button>
 
@@ -2133,8 +2192,9 @@ async function telaCredenciamentoDetalhe(alvo){
               <textarea id="crObs">${esc(p.observacaoContrato||"")}</textarea></div>
 
             <div class="barra-acoes">
-              <button class="btn" id="btGerar">${p.contratoGeradoEm?t("regerarContrato"):t("gerarContrato")}</button>
+              ${!r.travado?`<button class="btn" id="btGerar">${p.contratoGeradoEm?t("regerarContrato"):t("gerarContrato")}</button>`:""}
               ${r.temContrato?`<button class="btn neutro" id="btVerContrato">${t("verContrato")}</button>`:""}
+              ${r.temContratoVigente?`<button class="btn neutro" id="btVerVigente">${t("contratoVigente")}</button>`:""}
             </div>
           </div>
 
@@ -2199,10 +2259,19 @@ async function telaCredenciamentoDetalhe(alvo){
     }
     montarCustos();
 
-    id("btAddValor").onclick = ()=>{ custos.push({descricao:"",tipo:"ap",valor:0}); montarCustos(); };
+    // Ativo: nada de editar. Tudo vira leitura ate abrir uma nova revisao.
+    if (r.travado){
+      alvo.querySelectorAll("#crRegiao, #crPrazo, #crVigencia, #crMisc, #crObs, #crCustos input, #crCustos select")
+        .forEach(campo=>{ campo.disabled = true; });
+      alvo.querySelectorAll("#crCustos [data-cx], #btAddValor").forEach(bt=> bt.remove());
+    }
+
+    if (id("btAddValor")) id("btAddValor").onclick = ()=>{ custos.push({descricao:"",tipo:"ap",valor:0}); montarCustos(); };
+    if (id("btReabrir")) id("btReabrir").onclick = ()=>modalReabrir(p.id);
+    if (id("btVerVigente")) id("btVerVigente").onclick = ()=>abrirContrato(p.id, true);
     id("btVoltar").onclick = ()=>irPara("credenciamentos");
 
-    id("btGerar").onclick = async ()=>{
+    if (id("btGerar")) id("btGerar").onclick = async ()=>{
       try{
         await api("credenciamento.analisar", {
           id: p.id, regiaoAtuacao: val("crRegiao"),
@@ -2237,16 +2306,133 @@ async function telaCredenciamentoDetalhe(alvo){
   }catch(e){ alvo.innerHTML = `<div class="aviso perigo">${esc(e.message)}</div>`; }
 }
 
+/* Abre uma nova revisao do credenciamento. Serve para os dois perfis. */
+function modalReabrir(parceiroId){
+  abrirModal(t("novoCredenciamento"), `
+    <div class="aviso info" style="margin-bottom:12px">${t("travadoNota")}</div>
+    <div class="campo"><label for="reMotivo">${t("motivoReabertura")}</label>
+      <textarea id="reMotivo" placeholder="${t("motivoReaberturaNota")}"></textarea></div>
+  `, [
+    { texto:t("cancelar"), classe:"btn neutro", acao: fecharModal },
+    { texto:t("confirmarReabertura"), classe:"btn", acao: async ()=>{
+        const motivo = val("reMotivo");
+        if (!motivo){ torrada(t("motivoReabertura"), "erro"); return; }
+        try{
+          await api("credenciamento.reabrir", { id: parceiroId || "", motivo });
+          fecharModal(); torrada(t("salvo"), "ok"); desenhar();
+        }catch(e){ torrada(e.message, "erro", e.codigo); }
+      }},
+  ]);
+}
+
 /* Abre o contrato numa aba nova, pronto para imprimir em PDF. */
-async function abrirContrato(id){
+async function abrirContrato(id, vigente){
   try{
-    const r = await api("credenciamento.contrato", { id: id || "" });
+    const r = await api("credenciamento.contrato", { id: id || "", vigente: vigente === true });
     const aba = window.open("", "_blank");
     if (!aba){ torrada(t("permitaPopup"), "erro"); return; }
     aba.document.open();
     aba.document.write(r.html);
     aba.document.close();
   }catch(e){ torrada(e.message, "erro", e.codigo); }
+}
+
+/* -------------------------------------------------------------------
+   Painel do parceiro: escolas atribuidas e o que ele tem a receber,
+   calculado pelos valores do contrato dele.
+   ------------------------------------------------------------------- */
+async function telaParceiroPainel(alvo){
+  carregando(alvo);
+  try{
+    const r = await api("parceiro.painel", {});
+    const tt = r.totais;
+
+    if (r.escolas.length === 0){
+      alvo.innerHTML = `
+        <div class="cabeca"><div><h1>${t("minhasEscolas")}</h1><p>${esc(r.parceiro.nome)}</p></div></div>
+        ${r.parceiro.status!=="ATIVO"?`<div class="aviso alerta" style="margin-bottom:16px">
+          ${t("aguardandoCredenciamento")}</div>`:""}
+        <div class="cartao vazio">
+          <h3>${t("semEscolasParceiro")}</h3>
+          <p>${t("semEscolasParceiroNota")}</p>
+        </div>`;
+      return;
+    }
+
+    alvo.innerHTML = `
+      <div class="cabeca">
+        <div><h1>${t("minhasEscolas")}</h1><p>${esc(r.parceiro.nome)}</p></div>
+      </div>
+
+      <div class="grade g4" style="margin-bottom:16px">
+        <div class="indicador"><div class="rotulo">${t("escolas")}</div>
+          <div class="valor">${numero(tt.escolas)}</div>
+          <div class="nota">${numero(tt.concluidas)} ${t("escolasConcluidas").toLowerCase()}</div></div>
+        <div class="indicador"><div class="rotulo">${t("apsInstalados")}</div>
+          <div class="valor">${numero(tt.apsInst)}</div>
+          <div class="nota">${numero(tt.apsPrev)} ${t("apsPrev").toLowerCase()}</div></div>
+        <div class="indicador"><div class="rotulo">${t("totalPrevisto")}</div>
+          <div class="valor">${dinheiro(tt.previsto)}</div>
+          <div class="nota">${t("aInstalar")}: ${dinheiro(tt.aInstalar)}</div></div>
+        <div class="indicador"><div class="rotulo">${t("totalRealizado")}</div>
+          <div class="valor">${dinheiro(tt.realizado)}</div></div>
+        <div class="indicador ok"><div class="rotulo">${t("aReceber")}</div>
+          <div class="valor">${dinheiro(tt.aReceber)}</div></div>
+        <div class="indicador"><div class="rotulo">${t("recebido")}</div>
+          <div class="valor">${dinheiro(tt.recebido)}</div></div>
+      </div>
+
+      <details class="cartao dobra" style="margin-bottom:16px">
+        <summary class="cartao-pad">
+          <span style="display:flex;align-items:center;gap:10px">
+            <span class="seta">▶</span><h3>${t("tabelaValores")}</h3>
+            <span class="selo azul">${numero(r.custos.length)}</span>
+          </span>
+        </summary>
+        <div class="cartao-pad" style="padding-top:0">
+          <p style="color:var(--texto-2);font-size:12.5px;margin:0 0 10px">${t("tabelaValoresNota")}</p>
+          <div class="tabela-rolagem"><table>
+            <thead><tr><th>${t("descricao")}</th><th>${t("ondeAplica")}</th><th class="num">${t("valor")}</th></tr></thead>
+            <tbody>${r.custos.map(c=>`<tr>
+              <td>${esc(rotuloCusto(c))}</td>
+              <td>${esc(baseCusto(c.tipo))}</td>
+              <td class="num mono">${dinheiro(c.valor)}</td></tr>`).join("")}</tbody>
+          </table></div>
+          <p style="color:var(--texto-2);font-size:12.5px;margin:10px 0 0">
+            ${r.parceiro.compraMiscelaneos?t("parceiroCompra"):t("parceiroNaoCompra")}</p>
+        </div>
+      </details>
+
+      <div class="cartao tabela-rolagem">
+        <table>
+          <thead><tr>
+            <th>${t("inep")}</th><th>${t("escola")}</th><th>${t("status")}</th>
+            <th class="num">${t("aps")}</th>
+            <th class="num">${t("colPrevisto")}</th>
+            <th class="num">${t("colRealizado")}</th>
+            <th class="num">${t("colAReceber")}</th>
+          </tr></thead>
+          <tbody>${r.escolas.map(e=>`<tr>
+            <td class="mono">${esc(e.inep)}</td>
+            <td><b>${esc(e.escola)}</b><br><small style="color:var(--texto-2)">${esc(e.cidade)}${e.uf?"/"+esc(e.uf):""} · ${esc(e.projeto||"—")}</small></td>
+            <td>${seloEscola(e.status)}
+              ${e.dataNf?`<br><small class="mono" style="color:var(--texto-2)">${esc(e.dataNf.split("-").reverse().join("/"))}</small>`:""}</td>
+            <td class="num mono">${numero(e.qtdApsInst)} / ${numero(e.qtdApsPrev)}</td>
+            <td class="num mono">${dinheiro(e.previsto)}</td>
+            <td class="num mono">${dinheiro(e.realizado)}</td>
+            <td class="num mono" style="color:${e.recebido>0?"var(--ok)":"var(--texto)"}">
+              ${e.recebido>0?dinheiro(e.recebido)+" ✓":dinheiro(e.aReceber)}</td>
+          </tr>`).join("")}
+          <tr>
+            <td colspan="4" style="text-align:right"><b>${t("colTotal")}</b></td>
+            <td class="num mono"><b>${dinheiro(tt.previsto)}</b></td>
+            <td class="num mono"><b>${dinheiro(tt.realizado)}</b></td>
+            <td class="num mono"><b>${dinheiro(tt.aReceber)}</b></td>
+          </tr></tbody>
+        </table>
+      </div>
+      <p style="color:var(--texto-3);font-size:12px;margin-top:10px">${t("porEscolaNota")}</p>`;
+  }catch(e){ alvo.innerHTML = `<div class="aviso perigo">${esc(e.message)}</div>`; }
 }
 
 /* -------------------------------------------------------------------
@@ -2271,7 +2457,9 @@ async function telaMeuCredenciamento(alvo){
 
     alvo.innerHTML = `
       <div class="cabeca">
-        <div><h1>${t("meuCredenciamento")}</h1><p>${esc(p.razaoSocial)}</p></div>
+        <div><h1>${t("meuCredenciamento")}</h1>
+          <p>${esc(p.razaoSocial)}${Number(p.revisao)>1?` · ${t("revisao")} ${numero(p.revisao)}`:""}</p></div>
+        ${r.travado?`<button class="btn neutro" id="btPedirNovo">${t("solicitarNovo")}</button>`:""}
       </div>
 
       <div class="cartao cartao-pad" style="margin-bottom:16px">
@@ -2280,11 +2468,22 @@ async function telaMeuCredenciamento(alvo){
           ${esc(passo)}</div>
         ${p.motivoRecusa?`<div class="aviso alerta" style="margin-top:12px">
           <h4>${t("motivoRecusa")}</h4>${esc(p.motivoRecusa)}</div>`:""}
+        ${(!r.travado && p.reabertoEm)?`<div class="aviso info" style="margin-top:12px">
+          <h4>${t("reabertoEm")} ${dataHora(p.reabertoEm)}</h4>${esc(p.reaberturaMotivo)}</div>`:""}
       </div>
 
-      ${r.temContrato?`
+      ${(r.travado && r.temContratoVigente)?`
       <div class="cartao cartao-pad" style="margin-bottom:16px">
-        <h3 style="margin-bottom:4px">${t("contrato")}</h3>
+        <h3 style="margin-bottom:4px">${t("contratoVigente")}</h3>
+        <p style="color:var(--texto-2);font-size:12.5px;margin:0 0 12px">${t("travadoNota")}</p>
+        <div class="barra-acoes">
+          <button class="btn" id="btVerVigenteParceiro">${t("verContrato")}</button>
+        </div>
+      </div>`:""}
+
+      ${(r.temContrato && !r.travado)?`
+      <div class="cartao cartao-pad" style="margin-bottom:16px">
+        <h3 style="margin-bottom:4px">${t("contrato")} ${Number(p.revisao)>1?`· ${t("emRevisao")}`:""}</h3>
         <p style="color:var(--texto-2);font-size:12.5px;margin:0 0 12px">${t("contratoNota")}</p>
         <div class="barra-acoes">
           <button class="btn" id="btBaixarContrato">${t("verContrato")}</button>
@@ -2333,6 +2532,8 @@ async function telaMeuCredenciamento(alvo){
       </div>`;
 
     if (id("btBaixarContrato")) id("btBaixarContrato").onclick = ()=>abrirContrato("");
+    if (id("btVerVigenteParceiro")) id("btVerVigenteParceiro").onclick = ()=>abrirContrato("", true);
+    if (id("btPedirNovo")) id("btPedirNovo").onclick = ()=>modalReabrir("");
 
     // Escolher o arquivo apenas mostra o nome; o envio so acontece no Salvar.
     if (id("btEscolherArquivo")){
@@ -3236,7 +3437,7 @@ document.addEventListener("keydown", e=>{ if(e.key==="Escape") fecharModal(); })
       const r = await api("sessao.me", {});
       estado.usuario = r.usuario;
       estado.tela = r.usuario.precisaTrocarSenha ? "trocarSenha"
-        : r.usuario.perfil === "parceiro" ? "meuCredenciamento"
+        : r.usuario.perfil === "parceiro" ? "parceiroPainel"
         : r.usuario.perfil === "credenciador" ? "credenciamentos" : "painel";
     }catch(e){ encerrarLocal(); }
   }
