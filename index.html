@@ -339,7 +339,20 @@ const IDIOMAS = {
     pagar:"Aprovar e pagar", espera:"Deixar em espera", recusar:"Recusar",
     stENVIADO:"Aguardando financeiro", stEM_ESPERA:"Em espera", stRECUSADO:"Recusado", stPAGO:"Pago",
     stEM_ANDAMENTO:"Em andamento", stANEXOU_NF:"Anexou a NF", stANEXOU_COMPROVANTE:"Anexou o comprovante",
-    stREMOVEU_ANEXO:"Removeu anexo",
+    stREMOVEU_ANEXO:"Removeu anexo", stAGUARDANDO_REEMBOLSO:"Aguardando reembolso",
+    stREEMBOLSO_CONFIRMADO:"Confirmou o reembolso", stDESCONTO:"Lancou desconto",
+    temFrete:"Este pedido tem custo de frete?", valorFrete:"Valor do frete",
+    subtotalItens:"Soma dos itens", desconto:"Desconto na NF",
+    temReembolso:"Este pedido sera reembolsado?",
+    temReembolsoNota:"Marcando, o pedido so fecha quando voce confirmar que recebeu o reembolso.",
+    reembolso:"Reembolso", confirmarReembolso:"Confirmei o recebimento",
+    reembolsoPendente:"Aguardando voce confirmar que recebeu o reembolso.",
+    reembolsoConfirmado:"Reembolso confirmado em",
+    reembolsoObs:"Observacao do recebimento",
+    temDesconto:"A nota fiscal teve algum desconto?",
+    valorDesconto:"Valor do desconto", semDesconto:"Sem desconto",
+    descontoNota:"O desconto abate do total do pedido e nao entra item a item.",
+    sim:"Sim", nao:"Nao",
     documentos:"Documentos", anexoNf:"Nota fiscal", anexoComprovante:"Comprovante de pagamento",
     anexoNfQuem:"Anexada pelo comprador", anexoComprovanteQuem:"Anexado pelo financeiro",
     anexar:"Anexar arquivo", maisUm:"Anexar mais um", trocarArquivo:"Trocar arquivo", baixar:"Baixar", removerAnexo:"Remover",
@@ -550,7 +563,20 @@ const IDIOMAS = {
     pagar:"Approve and pay", espera:"Put on hold", recusar:"Reject",
     stENVIADO:"Waiting on finance", stEM_ESPERA:"On hold", stRECUSADO:"Rejected", stPAGO:"Paid",
     stEM_ANDAMENTO:"In progress", stANEXOU_NF:"Attached the invoice", stANEXOU_COMPROVANTE:"Attached the receipt",
-    stREMOVEU_ANEXO:"Removed attachment",
+    stREMOVEU_ANEXO:"Removed attachment", stAGUARDANDO_REEMBOLSO:"Awaiting reimbursement",
+    stREEMBOLSO_CONFIRMADO:"Confirmed reimbursement", stDESCONTO:"Entered a discount",
+    temFrete:"Does this order have shipping costs?", valorFrete:"Shipping cost",
+    subtotalItens:"Items subtotal", desconto:"Invoice discount",
+    temReembolso:"Will this order be reimbursed?",
+    temReembolsoNota:"If checked, the order only closes once you confirm you got the money back.",
+    reembolso:"Reimbursement", confirmarReembolso:"I received it",
+    reembolsoPendente:"Waiting for you to confirm you received the reimbursement.",
+    reembolsoConfirmado:"Reimbursement confirmed on",
+    reembolsoObs:"Note about the reimbursement",
+    temDesconto:"Did the invoice have any discount?",
+    valorDesconto:"Discount amount", semDesconto:"No discount",
+    descontoNota:"The discount is taken off the order total and is not split per item.",
+    sim:"Yes", nao:"No",
     documentos:"Documents", anexoNf:"Invoice", anexoComprovante:"Payment receipt",
     anexoNfQuem:"Attached by the buyer", anexoComprovanteQuem:"Attached by finance",
     anexar:"Attach file", maisUm:"Attach another", trocarArquivo:"Replace file", baixar:"Download", removerAnexo:"Remove",
@@ -1081,7 +1107,8 @@ function seloEscola(status){
 }
 
 function seloStatus(status){
-  const cor = { ENVIADO:"azul", EM_ANDAMENTO:"roxo", EM_ESPERA:"ambar", RECUSADO:"vermelho", PAGO:"verde" }[status] || "cinza";
+  const cor = { ENVIADO:"azul", EM_ANDAMENTO:"roxo", AGUARDANDO_REEMBOLSO:"ambar",
+    EM_ESPERA:"ambar", RECUSADO:"vermelho", PAGO:"verde" }[status] || "cinza";
   return `<span class="selo ${cor}">${t("st"+status)}</span>`;
 }
 
@@ -2890,7 +2917,7 @@ async function telaPedidos(alvo){
   carregando(alvo);
   try{
     const r = await api("pedidos.listar", { status: estado.dados.status || "" });
-    const filtros = ["", "ENVIADO", "EM_ANDAMENTO", "EM_ESPERA", "RECUSADO", "PAGO"];
+    const filtros = ["", "ENVIADO", "EM_ANDAMENTO", "AGUARDANDO_REEMBOLSO", "EM_ESPERA", "RECUSADO", "PAGO"];
     alvo.innerHTML = `
       <div class="cabeca">
         <div><h1>${t("pedidos")}</h1><p>${r.pedidos.length} ${idioma==="pt-BR"?"pedidos":"orders"}</p></div>
@@ -2913,6 +2940,7 @@ async function telaPedidos(alvo){
           <td><small class="mono">${p.ineps.map(i=>esc(i.inep)).join(", ")||"—"}</small></td>
           <td class="num mono">${dinheiro(p.valorTotal)}</td>
           <td>${seloStatus(p.status)}
+            ${p.temReembolso?`<br><span class="selo ambar">${t("reembolso")}</span>`:""}
             <br><small class="mono" style="color:var(--texto-2)">
               ${p.qtdNf>0?`NF ${p.qtdNf}`:"NF —"} · ${p.qtdComprovante>0?`Comp. ${p.qtdComprovante}`:"Comp. —"}</small></td>
           <td><button class="btn neutro pequeno" data-abrir="${p.id}">${t("detalhe")}</button></td>
@@ -2931,7 +2959,7 @@ async function telaPedidos(alvo){
 function rascunhoNovo(){
   return { id:"", fornecedor:"", observacao:"",
     itens:[{descricao:"",quantidade:1,unidade:"UN",valorUnitario:0}],
-    rateios:[] };
+    rateios:[], temFrete:false, valorFrete:0, temReembolso:false, valorDesconto:0 };
 }
 
 async function telaPedidoForm(alvo){
@@ -2950,7 +2978,11 @@ async function telaPedidoForm(alvo){
   const jaPago = estado.dados.statusAtual === "PAGO";
 
   const totalItem = (i)=> Math.round(((Number(i.quantidade)||0)*(Number(i.valorUnitario)||0))*100)/100;
-  const totalPedido = ()=> Math.round(rasc.itens.reduce((s,i)=> s+totalItem(i), 0)*100)/100;
+  const totalItens = ()=> Math.round(rasc.itens.reduce((s,i)=> s+totalItem(i), 0)*100)/100;
+  const freteAtual = ()=> rasc.temFrete ? (Number(rasc.valorFrete)||0) : 0;
+  // Total do pedido = itens + frete - desconto (o desconto vem com a NF).
+  const totalPedido = ()=> Math.max(0,
+    Math.round((totalItens() + freteAtual() - (Number(rasc.valorDesconto)||0))*100)/100);
 
   function dividirIgual(){
     if (rasc.rateios.length===0) return;
@@ -2979,14 +3011,35 @@ async function telaPedidoForm(alvo){
         <h3 style="margin-bottom:12px">${t("itens")}</h3>
         <div id="listaItens"></div>
         <button class="btn neutro pequeno" id="btAddItem">+ ${t("adicionarItem")}</button>
+
+        <div class="item" style="margin-top:12px">
+          <div class="escolha" style="margin:0;border:0;padding:0;background:transparent">
+            <input type="checkbox" id="pTemFrete" ${rasc.temFrete?"checked":""}>
+            <div class="info"><b><label for="pTemFrete" style="margin:0;color:var(--texto);font-size:13.5px">
+              ${t("temFrete")}</label></b></div>
+          </div>
+          <div id="campoFrete" style="margin-top:9px;${rasc.temFrete?"":"display:none"}">
+            <label for="pValorFrete">${t("valorFrete")}</label>
+            <input id="pValorFrete" class="num" inputmode="numeric" style="max-width:180px"
+              value="${dinheiro(rasc.valorFrete||0)}">
+          </div>
+        </div>
+
         <hr style="border:0;border-top:1px solid var(--linha);margin:16px 0">
+        <div class="escolha" style="margin-bottom:14px">
+          <input type="checkbox" id="pTemReembolso" ${rasc.temReembolso?"checked":""}>
+          <div class="info"><b><label for="pTemReembolso" style="margin:0;color:var(--texto);font-size:13.5px">
+            ${t("temReembolso")}</label></b>
+            <small style="color:var(--texto-2)">${t("temReembolsoNota")}</small></div>
+        </div>
         <div class="campo"><label for="pFornecedor">${t("fornecedor")}</label>
           <input id="pFornecedor" value="${esc(rasc.fornecedor)}"></div>
         <div class="campo"><label for="pObs">${t("observacao")}</label>
           <textarea id="pObs">${esc(rasc.observacao)}</textarea></div>
         <div class="indicador" style="border-color:var(--sinal)">
           <div class="rotulo">${t("valorTotal")}</div>
-          <div class="valor" id="totalPedido">${dinheiro(0)}</div></div>
+          <div class="valor" id="totalPedido">${dinheiro(0)}</div>
+          <div class="nota" id="totalDetalhe"></div></div>
       </div>
 
       <div class="cartao cartao-pad">
@@ -3112,6 +3165,13 @@ async function telaPedidoForm(alvo){
   function atualizarTotais(){
     const campo = id("totalPedido");
     if (campo) campo.textContent = dinheiro(totalPedido());
+    const detalhe = id("totalDetalhe");
+    if (detalhe){
+      const partes = [`${t("subtotalItens")}: ${dinheiro(totalItens())}`];
+      if (freteAtual() > 0) partes.push(`${t("valorFrete")}: ${dinheiro(freteAtual())}`);
+      if ((Number(rasc.valorDesconto)||0) > 0) partes.push(`${t("desconto")}: −${dinheiro(rasc.valorDesconto)}`);
+      detalhe.textContent = partes.join(" · ");
+    }
   }
 
   // Lista o que ainda impede o envio. Vazia = pode enviar.
@@ -3167,6 +3227,7 @@ async function telaPedidoForm(alvo){
       const r = await api("pedidos.salvar", {
         id: rasc.id, fornecedor: rasc.fornecedor, observacao: rasc.observacao,
         itens: rasc.itens, rateios: rasc.rateios,
+        valorFrete: freteAtual(), temReembolso: rasc.temReembolso === true,
       });
       estado.rascunho = null;
       torrada(t("salvo"), "ok");
@@ -3181,6 +3242,17 @@ async function telaPedidoForm(alvo){
     const ultimo = id(`it${rasc.itens.length-1}desc`);
     if (ultimo) ultimo.focus();
   };
+  id("pTemFrete").addEventListener("change", ()=>{
+    rasc.temFrete = id("pTemFrete").checked;
+    id("campoFrete").style.display = rasc.temFrete ? "" : "none";
+    if (!rasc.temFrete) rasc.valorFrete = 0;
+    dividirIgual(); atualizarTotais(); sincronizarRateios(); atualizarAviso();
+  });
+  id("pValorFrete").addEventListener("input", ()=>{
+    rasc.valorFrete = formatarMoeda(id("pValorFrete"));
+    dividirIgual(); atualizarTotais(); sincronizarRateios(); atualizarAviso();
+  });
+  id("pTemReembolso").addEventListener("change", ()=>{ rasc.temReembolso = id("pTemReembolso").checked; });
   id("pFornecedor").addEventListener("input", ()=> rasc.fornecedor = id("pFornecedor").value);
   id("pObs").addEventListener("input", ()=> rasc.observacao = id("pObs").value);
   id("btVoltar").onclick = ()=>{ estado.rascunho = null; irPara("pedidos"); };
@@ -3244,6 +3316,12 @@ async function telaPedidoDetalhe(alvo){
               <td class="mono">${esc(i.unidade)}</td>
               <td class="num mono">${dinheiro(i.valorUnitario)}</td>
               <td class="num mono">${dinheiro(i.valorTotal)}</td></tr>`).join("")}
+              <tr><td colspan="4" style="text-align:right">${t("subtotalItens")}</td>
+                  <td class="num mono">${dinheiro(p.valorItens||p.valorTotal)}</td></tr>
+              ${Number(p.valorFrete)>0?`<tr><td colspan="4" style="text-align:right">${t("valorFrete")}</td>
+                  <td class="num mono">${dinheiro(p.valorFrete)}</td></tr>`:""}
+              ${Number(p.valorDesconto)>0?`<tr><td colspan="4" style="text-align:right;color:var(--perigo)">${t("desconto")}</td>
+                  <td class="num mono" style="color:var(--perigo)">−${dinheiro(p.valorDesconto)}</td></tr>`:""}
               <tr><td colspan="4" style="text-align:right"><b>${t("valorTotal")}</b></td>
                   <td class="num mono"><b>${dinheiro(p.valorTotal)}</b></td></tr></tbody>
           </table></div>
@@ -3262,6 +3340,20 @@ async function telaPedidoDetalhe(alvo){
                 ${barraCapacidade({limite:x.limite, gastoInstalacao:0, gastoPedidos:x.gastoTotal, percentualUso: x.limite>0 ? x.gastoTotal/x.limite*100 : 0})}
               </div>`).join("")}
           </div>
+
+          ${p.temReembolso?`
+          <div class="cartao cartao-pad" style="margin-bottom:14px">
+            <h3 style="margin-bottom:4px">${t("reembolso")}</h3>
+            ${p.reembolsoConfirmadoEm
+              ? `<div class="aviso ok" style="margin-top:8px">
+                  <b>${t("reembolsoConfirmado")} ${dataHora(p.reembolsoConfirmadoEm)}</b>
+                  ${p.reembolsoObservacao?`<br>${esc(p.reembolsoObservacao)}`:""}</div>`
+              : `<div class="aviso alerta" style="margin:8px 0 12px">${t("reembolsoPendente")}</div>
+                 ${(perfil==="comprador"||perfil==="admin") && p.status!=="RECUSADO" ? `
+                 <div class="campo"><label for="reObs">${t("reembolsoObs")}</label>
+                   <textarea id="reObs"></textarea></div>
+                 <button class="btn ok" id="btConfirmarReembolso">${t("confirmarReembolso")}</button>`:""}`}
+          </div>`:""}
 
           <div class="cartao cartao-pad" style="margin-bottom:14px">
             <h3 style="margin-bottom:4px">${t("documentos")}</h3>
@@ -3339,20 +3431,28 @@ async function telaPedidoDetalhe(alvo){
         if (arquivos.length === 0) return;
         const grande = arquivos.find(x=>x.size > 5*1024*1024);
         if (grande){ torrada(`${esc(grande.name)}: ${t("arquivoGrande")}`, "erro"); campo.value=""; return; }
-        if (botao){ botao.disabled = true; botao.textContent = t("enviandoArquivo"); }
-        try{
-          for (const arquivo of arquivos){
-            const conteudo = await lerArquivo(arquivo);
-            await api("pedidos.anexar", {
-              pedidoId: p.id, tipo, nome: arquivo.name, mime: arquivo.type, conteudo,
-            });
+        const enviar = async (valorDesconto)=>{
+          if (botao){ botao.disabled = true; botao.textContent = t("enviandoArquivo"); }
+          try{
+            for (let i = 0; i < arquivos.length; i++){
+              const conteudo = await lerArquivo(arquivos[i]);
+              await api("pedidos.anexar", {
+                pedidoId: p.id, tipo, nome: arquivos[i].name, mime: arquivos[i].type, conteudo,
+                // O desconto vai junto com o primeiro arquivo da leva.
+                ...(tipo === "nf" && i === 0 && valorDesconto !== undefined ? { valorDesconto } : {}),
+              });
+            }
+            torrada(t("salvo"), "ok");
+            desenhar();
+          }catch(err){
+            torrada(err.message, "erro", err.codigo);
+            if (botao){ botao.disabled = false; botao.textContent = t("anexar"); }
           }
-          torrada(t("salvo"), "ok");
-          desenhar();
-        }catch(err){
-          torrada(err.message, "erro", err.codigo);
-          if (botao){ botao.disabled = false; botao.textContent = t("anexar"); }
-        }
+        };
+
+        // Nota fiscal: antes de subir, pergunta se houve desconto.
+        if (tipo === "nf") perguntarDesconto(p, enviar);
+        else enviar();
       };
 
       alvoAnexo.querySelectorAll("[data-baixar]").forEach(bt=> bt.onclick = async ()=>{
@@ -3374,12 +3474,21 @@ async function telaPedidoDetalhe(alvo){
     montarAnexo("nf");
     montarAnexo("comprovante");
 
+    if (id("btConfirmarReembolso")) id("btConfirmarReembolso").onclick = async ()=>{
+      try{
+        await api("pedidos.confirmarReembolso", { id: p.id, observacao: val("reObs") });
+        torrada(t("salvo"), "ok"); desenhar();
+      }catch(e){ torrada(e.message, "erro", e.codigo); }
+    };
+
     id("btVoltar").onclick = ()=>irPara("pedidos");
     if (id("btEditar")) id("btEditar").onclick = ()=>{
       estado.rascunho = {
         id: p.id, fornecedor: p.fornecedor, observacao: p.observacao,
         itens: r.itens.map(i=>({descricao:i.descricao, quantidade:Number(i.quantidade), unidade:i.unidade, valorUnitario:Number(i.valorUnitario)})),
         rateios: r.rateios.map(x=>({escolaId:x.escolaId, valor:Number(x.valor)})),
+        temFrete: Number(p.valorFrete) > 0, valorFrete: Number(p.valorFrete)||0,
+        temReembolso: p.temReembolso === true, valorDesconto: Number(p.valorDesconto)||0,
       };
       irPara("pedidoNovo", { numero:p.numero, statusAtual:p.status,
         observacaoFinanceiro: ultimaObs?ultimaObs.observacao:"" });
@@ -3399,6 +3508,49 @@ async function telaPedidoDetalhe(alvo){
       }catch(e){ torrada(e.message, "erro", e.codigo); }
     });
   }catch(e){ alvo.innerHTML = `<div class="aviso perigo">${esc(e.message)}</div>`; }
+}
+
+/* Desconto da NF: abate do total do pedido, sem entrar item a item. */
+function perguntarDesconto(pedido, aoConfirmar){
+  abrirModal(t("temDesconto"), `
+    <p style="color:var(--texto-2);font-size:12.5px;margin:0 0 12px">${t("descontoNota")}</p>
+    <div class="escolha">
+      <input type="radio" name="temDesc" id="descNao" checked style="width:16px;height:16px">
+      <div class="info"><label for="descNao" style="margin:0;color:var(--texto);font-size:13.5px">
+        ${t("nao")} — ${t("semDesconto")}</label></div>
+    </div>
+    <div class="escolha">
+      <input type="radio" name="temDesc" id="descSim" style="width:16px;height:16px">
+      <div class="info"><label for="descSim" style="margin:0;color:var(--texto);font-size:13.5px">
+        ${t("sim")}</label></div>
+    </div>
+    <div id="campoDesc" style="display:none;margin-top:10px">
+      <label for="descValor">${t("valorDesconto")}</label>
+      <input id="descValor" class="num" inputmode="numeric" style="max-width:200px" value="${dinheiro(pedido.valorDesconto||0)}">
+      <div class="aviso info" style="margin-top:10px" id="descPrevia"></div>
+    </div>
+  `, [
+    { texto:t("cancelar"), classe:"btn neutro", acao: fecharModal },
+    { texto:t("salvar"), classe:"btn", acao: ()=>{
+        const valor = id("descSim").checked ? deMoeda(id("descValor").value) : 0;
+        fecharModal();
+        aoConfirmar(valor);
+      }},
+  ]);
+
+  const base = (Number(pedido.valorItens)||Number(pedido.valorTotal)||0) + (Number(pedido.valorFrete)||0);
+  const previa = ()=>{
+    const valor = deMoeda(id("descValor").value);
+    id("descPrevia").innerHTML = `${t("valorTotal")}: <b class="mono">${dinheiro(Math.max(0, base - valor))}</b>`;
+  };
+  const alternar = ()=>{
+    id("campoDesc").style.display = id("descSim").checked ? "" : "none";
+    if (id("descSim").checked) previa();
+  };
+  id("descSim").onchange = alternar;
+  id("descNao").onchange = alternar;
+  id("descValor").addEventListener("input", ()=>{ formatarMoeda(id("descValor")); previa(); });
+  if ((Number(pedido.valorDesconto)||0) > 0){ id("descSim").checked = true; alternar(); }
 }
 
 /* ===================================================================
