@@ -888,8 +888,7 @@ function desenhar(){
   if (estado.usuario.precisaTrocarSenha && estado.tela !== "trocarSenha"){
     estado.tela = "trocarSenha";
   }
-  const rotulo = { admin:t("perfilAdmin"), financeiro:t("perfilFinanceiro"), comprador:t("perfilComprador"),
-    credenciador:t("perfilCredenciador"), parceiro:t("perfilParceiro") }[estado.usuario.perfil];
+  const rotulo = nomePerfil(estado.usuario.perfil);
   raiz.innerHTML = `
     <div class="app">
       <nav class="rail">
@@ -1052,6 +1051,12 @@ function barraCapacidade(e){
 }
 
 const STATUS_ESCOLA = ["Em andamento","Suspenso","Cancelado","Finalizado","Pago"];
+
+/* Todo rotulo de perfil passa por aqui: perfil novo nao vira "undefined". */
+function nomePerfil(perfil){
+  return ({ admin:t("perfilAdmin"), financeiro:t("perfilFinanceiro"), comprador:t("perfilComprador"),
+    credenciador:t("perfilCredenciador"), parceiro:t("perfilParceiro") })[perfil] || esc(perfil || "—");
+}
 
 /* Tipos de custo do parceiro. Somente "outro" pede descricao. */
 function tiposCusto(){
@@ -2863,11 +2868,11 @@ async function telaUsuarios(alvo){
         <tbody>${r.usuarios.map(u=>`<tr>
           <td><b>${esc(u.nome)}</b></td>
           <td class="mono">${esc(u.login)}</td>
-          <td>${{admin:t("perfilAdmin"),financeiro:t("perfilFinanceiro"),comprador:t("perfilComprador")}[u.perfil]}</td>
+          <td>${nomePerfil(u.perfil)}</td>
           <td>${u.ativo?`<span class="selo verde">${t("ativo")}</span>`:`<span class="selo cinza">${t("inativo")}</span>`}
               ${u.precisaTrocarSenha?`<span class="selo ambar">${idioma==="pt-BR"?"senha inicial":"initial password"}</span>`:""}</td>
           <td><div class="barra-acoes">
-            <button class="btn neutro pequeno" data-editar="${u.id}">${t("editar")}</button>
+            ${u.perfil!=="parceiro"?`<button class="btn neutro pequeno" data-editar="${u.id}">${t("editar")}</button>`:""}
             <button class="btn neutro pequeno" data-reset="${u.id}">${t("resetarSenha")}</button>
           </div></td></tr>`).join("")}</tbody>
       </table></div>`;
